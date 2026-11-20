@@ -9,6 +9,7 @@ import com.example.data.prefs.SettingsDataStore
 import com.example.installer.ApkInstaller
 import com.example.installer.InstallResultBus
 import com.example.installer.InstallState
+import com.example.model.ApkBundleMetadata
 import com.example.model.DiscoveredSenderDevice
 import com.example.model.TransferDirection
 import com.example.model.TransferMethod
@@ -33,6 +34,13 @@ enum class ReceiverMode {
     HOTSPOT_HTTP
 }
 
+data class ReceivedAppItem(
+    val metadata: ApkBundleMetadata,
+    val savedFiles: List<File>,
+    val displayLocation: String,
+    val durationMillis: Long
+)
+
 class ReceiverViewModel(
     private val nearbyManager: NearbyTransferManager,
     private val httpDownloader: HttpApkDownloader,
@@ -47,11 +55,15 @@ class ReceiverViewModel(
     private val _canRequestInstalls = MutableStateFlow(apkInstaller.canRequestPackageInstalls())
     val canRequestInstalls: StateFlow<Boolean> = _canRequestInstalls.asStateFlow()
 
+    private val _receivedApps = MutableStateFlow<List<ReceivedAppItem>>(emptyList())
+    val receivedApps: StateFlow<List<ReceivedAppItem>> = _receivedApps.asStateFlow()
+
     val nearbyState: StateFlow<NearbyReceiverState> = nearbyManager.receiverState
     val httpDownloadState: StateFlow<HttpDownloadState> = httpDownloader.state
     val installState: StateFlow<InstallState> = InstallResultBus.state
 
     private var recordedTransferKeys = mutableSetOf<String>()
+    private var lastHotspotUrl: String? = null
     private var discoveryJob: Job? = null
 
     init {
@@ -64,6 +76,14 @@ class ReceiverViewModel(
             nearbyState.collect { state ->
                 when (state) {
                     is NearbyReceiverState.Completed -> {
+                        appendReceivedItem(
+                            ReceivedAppItem(
+                                metadata = state.metadata,
+                                savedFiles = state.savedFiles,
+                                displayLocation = state.displayLocation,
+                                durationMillis = state.durationMillis
+                            )
+                        )
                         val key = "nearby_${state.metadata.transferId}"
                         if (recordedTransferKeys.add(key)) {
                             historyRepository.recordTransfer(
@@ -91,6 +111,15 @@ class ReceiverViewModel(
             httpDownloadState.collect { state ->
                 when (state) {
                     is HttpDownloadState.Completed -> {
+                        lastHotspotUrl = state.url
+                        appendReceivedItem(
+                            ReceivedAppItem(
+                                metadata = state.metadata,
+                                savedFiles = state.savedFiles,
+                                displayLocation = state.displayLocation,
+                                durationMillis = state.durationMillis
+                            )
+                        )
                         val key = "http_${state.metadata.transferId}"
                         if (recordedTransferKeys.add(key)) {
                             historyRepository.recordTransfer(
@@ -113,6 +142,13 @@ class ReceiverViewModel(
                     else -> Unit
                 }
             }
+        }
+    }
+
+    private fun appendReceivedItem(item: ReceivedAppItem) {
+        val current = _receivedApps.value
+        if (current.none { it.metadata.transferId == item.metadata.transferId }) {
+            _receivedApps.value = current + item
         }
     }
 
@@ -190,10 +226,25 @@ class ReceiverViewModel(
 
     fun startHttpDownload(url: String) {
         _mode.value = ReceiverMode.HOTSPOT_HTTP
+        lastHotspotUrl = url
         InstallResultBus.reset()
         viewModelScope.launch {
             val exportPublic = settingsDataStore.settings.first().exportToPublicDownloads
             httpDownloader.startDownload(url, exportPublic)
+        }
+    }
+
+    fun receiveNextNearbyApp() {
+        startNearbyDiscovery()
+    }
+
+    fun receiveNextHotspotApp() {
+        val url = lastHotspotUrl
+        if (!url.isNullOrBlank()) {
+            startHttpDownload(url)
+        } else {
+            httpDownloader.reset()
+            InstallResultBus.reset()
         }
     }
 
@@ -237,6 +288,8 @@ class ReceiverViewModel(
         nearbyManager.cancelReceiver()
         httpDownloader.cancel()
         InstallResultBus.reset()
+        _receivedApps.value = emptyList()
+        lastHotspotUrl = null
     }
 
     override fun onCleared() {

@@ -84,6 +84,7 @@ import com.example.ui.components.PulseRadarAnimation
 import com.example.ui.components.TransferProgressBar
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.viewmodel.BatchTransferQueueState
 import com.example.ui.viewmodel.ExtractionUiState
 import com.example.ui.viewmodel.SenderViewModel
 import com.example.util.FormatUtils
@@ -102,6 +103,7 @@ fun SenderTransferScreen(
     val hotspotModeActive by viewModel.hotspotModeActive.collectAsStateWithLifecycle()
     val hotspotInfo by viewModel.hotspotInfo.collectAsStateWithLifecycle()
     val serverStatus by viewModel.httpServerStatus.collectAsStateWithLifecycle()
+    val batchQueue by viewModel.batchQueue.collectAsStateWithLifecycle()
 
     val nearbyPermissions = remember { PermissionHelper.getNearbyTransferPermissions() }
     val hotspotPermissions = remember { PermissionHelper.getHotspotPermissions() }
@@ -154,8 +156,8 @@ fun SenderTransferScreen(
         }
     }
 
-    LaunchedEffect(hotspotModeActive, missingNearbyPerms, connectivity, extractionState) {
-        if (!hotspotModeActive) {
+    LaunchedEffect(hotspotModeActive, missingNearbyPerms, connectivity, extractionState, batchQueue.isFinished) {
+        if (!hotspotModeActive && !batchQueue.isFinished) {
             hotspotStarted = false
             when {
                 missingNearbyPerms.isNotEmpty() -> {
@@ -177,8 +179,8 @@ fun SenderTransferScreen(
         }
     }
 
-    LaunchedEffect(hotspotModeActive, missingHotspotPerms) {
-        if (hotspotModeActive) {
+    LaunchedEffect(hotspotModeActive, missingHotspotPerms, batchQueue.isFinished) {
+        if (hotspotModeActive && !batchQueue.isFinished) {
             showConnectivityDialog = false
             if (missingHotspotPerms.isNotEmpty()) {
                 if (!hotspotPermRequested) {
@@ -260,44 +262,75 @@ fun SenderTransferScreen(
             ) {
                 Spacer(modifier = Modifier.height(4.dp))
 
-                if (hotspotModeActive) {
-                    if (missingHotspotPerms.isNotEmpty()) {
-                        PermissionRationaleCard(
-                            missingPermissions = missingHotspotPerms,
-                            onGrantClick = {
-                                hotspotPermissionLauncher.launch(missingHotspotPerms.toTypedArray())
-                            },
-                            title = stringResource(R.string.sender_hotspot_perms_title),
-                            description = stringResource(R.string.sender_hotspot_perms_desc)
-                        )
+                if (batchQueue.isBatch && batchQueue.isFinished) {
+                    BatchTransferSummaryView(
+                        batchQueue = batchQueue,
+                        onDone = handleBack
+                    )
+                } else {
+                    if (batchQueue.isBatch) {
+                        BatchQueueProgressBanner(batchQueue = batchQueue)
                     }
-                    val bundle = (extractionState as? ExtractionUiState.Ready)?.bundle
-                    if (bundle != null) {
-                        HotspotSenderView(
-                            bundle = bundle,
-                            hotspotInfo = hotspotInfo,
-                            serverStatus = serverStatus,
-                            onRefreshIp = { viewModel.refreshHotspotIp() },
-                            onOpenHotspotSettings = {
-                                runCatching {
-                                    context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
-                                }.onFailure {
-                                    runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS)) }
-                                }
-                            },
-                            onMarkSent = {
-                                viewModel.markHotspotTransferComplete()
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.sender_saved_history_toast),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                handleBack()
-                            },
-                            onCancel = handleBack
+
+                    if (batchQueue.isBatch && batchQueue.isPreparingNext) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        CircularProgressIndicator()
+                        Text(
+                            text = stringResource(
+                                R.string.batch_preparing_next,
+                                batchQueue.currentNumber,
+                                batchQueue.totalCount,
+                                batchQueue.currentApp?.appName.orEmpty()
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
                         )
-                    }
-                } else if (missingNearbyPerms.isNotEmpty()) {
+                    } else if (hotspotModeActive) {
+                        if (missingHotspotPerms.isNotEmpty()) {
+                            PermissionRationaleCard(
+                                missingPermissions = missingHotspotPerms,
+                                onGrantClick = {
+                                    hotspotPermissionLauncher.launch(missingHotspotPerms.toTypedArray())
+                                },
+                                title = stringResource(R.string.sender_hotspot_perms_title),
+                                description = stringResource(R.string.sender_hotspot_perms_desc)
+                            )
+                        }
+                        val bundle = (extractionState as? ExtractionUiState.Ready)?.bundle
+                        if (bundle != null) {
+                            HotspotSenderView(
+                                bundle = bundle,
+                                hotspotInfo = hotspotInfo,
+                                serverStatus = serverStatus,
+                                batchQueue = batchQueue,
+                                onRefreshIp = { viewModel.refreshHotspotIp() },
+                                onOpenHotspotSettings = {
+                                    runCatching {
+                                        context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                                    }.onFailure {
+                                        runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                                    }
+                                },
+                                onMarkSent = {
+                                    if (batchQueue.isBatch) {
+                                        viewModel.advanceHotspotBatchQueue(markCurrentSucceeded = true)
+                                    } else {
+                                        viewModel.markHotspotTransferComplete()
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.sender_saved_history_toast),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        handleBack()
+                                    }
+                                },
+                                onSkipBatchItem = {
+                                    viewModel.advanceHotspotBatchQueue(markCurrentSucceeded = false)
+                                },
+                                onCancel = handleBack
+                            )
+                        }
+                    } else if (missingNearbyPerms.isNotEmpty()) {
                     PermissionRationaleCard(
                         missingPermissions = missingNearbyPerms,
                         onGrantClick = { nearbyPermissionLauncher.launch(missingNearbyPerms.toTypedArray()) }
@@ -453,6 +486,14 @@ fun SenderTransferScreen(
                                 Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(stringResource(R.string.sender_try_hotspot_mode))
+                            }
+                            if (batchQueue.isBatch) {
+                                TextButton(
+                                    onClick = { viewModel.skipCurrentBatchItem() },
+                                    modifier = Modifier.testTag("nearby_skip_app_button")
+                                ) {
+                                    Text(stringResource(R.string.batch_hotspot_skip_app))
+                                }
                             }
                             TextButton(
                                 onClick = handleBack,
@@ -687,6 +728,7 @@ fun SenderTransferScreen(
                         }
                     }
                 }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -699,9 +741,11 @@ private fun HotspotSenderView(
     bundle: ExtractedApkBundle,
     hotspotInfo: HotspotInfo,
     serverStatus: HttpServerStatus,
+    batchQueue: BatchTransferQueueState,
     onRefreshIp: () -> Unit,
     onOpenHotspotSettings: () -> Unit,
     onMarkSent: () -> Unit,
+    onSkipBatchItem: () -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
@@ -870,6 +914,7 @@ private fun HotspotSenderView(
         }
     }
 
+    val hasMoreInBatch = batchQueue.isBatch && batchQueue.currentIndex < batchQueue.totalCount - 1
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -883,10 +928,165 @@ private fun HotspotSenderView(
         Button(
             onClick = onMarkSent,
             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen, contentColor = Color.White),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .testTag(if (hasMoreInBatch) "hotspot_next_app_button" else "hotspot_done_button")
         ) {
-            Text(stringResource(R.string.action_done))
+            Text(
+                text = if (hasMoreInBatch) {
+                    stringResource(
+                        R.string.batch_hotspot_next_app,
+                        batchQueue.currentNumber + 1,
+                        batchQueue.totalCount
+                    )
+                } else {
+                    stringResource(R.string.action_done)
+                }
+            )
         }
+    }
+    if (batchQueue.isBatch) {
+        TextButton(
+            onClick = onSkipBatchItem,
+            modifier = Modifier.testTag("hotspot_skip_app_button")
+        ) {
+            Text(stringResource(R.string.batch_hotspot_skip_app))
+        }
+    }
+}
+
+@Composable
+private fun BatchQueueProgressBanner(batchQueue: BatchTransferQueueState) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = PrimaryBlue.copy(alpha = 0.14f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("batch_progress_banner")
+    ) {
+        Text(
+            text = if (batchQueue.isPreparingNext) {
+                stringResource(
+                    R.string.batch_preparing_next,
+                    batchQueue.currentNumber,
+                    batchQueue.totalCount,
+                    batchQueue.currentApp?.appName.orEmpty()
+                )
+            } else {
+                stringResource(
+                    R.string.batch_sending_progress,
+                    batchQueue.currentNumber,
+                    batchQueue.totalCount,
+                    batchQueue.currentApp?.appName.orEmpty()
+                )
+            },
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = PrimaryBlue,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        )
+    }
+}
+
+@Composable
+private fun BatchTransferSummaryView(
+    batchQueue: BatchTransferQueueState,
+    onDone: () -> Unit
+) {
+    val sentCount = batchQueue.sentCount
+    val totalCount = batchQueue.totalCount
+    val failedItems = batchQueue.failedItems
+    val anySucceeded = sentCount > 0
+
+    Spacer(modifier = Modifier.height(16.dp))
+    Box(
+        modifier = Modifier
+            .size(88.dp)
+            .clip(CircleShape)
+            .background(
+                if (anySucceeded) SuccessGreen.copy(alpha = 0.14f)
+                else MaterialTheme.colorScheme.errorContainer
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (anySucceeded) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline,
+            contentDescription = stringResource(
+                if (anySucceeded) R.string.sender_sent_cd else R.string.cd_error
+            ),
+            tint = if (anySucceeded) SuccessGreen else MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(56.dp)
+        )
+    }
+
+    Text(
+        text = stringResource(R.string.batch_summary_title),
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = if (anySucceeded) SuccessGreen else MaterialTheme.colorScheme.error,
+        textAlign = TextAlign.Center
+    )
+
+    Text(
+        text = if (anySucceeded) {
+            stringResource(R.string.batch_summary_sent_count, sentCount, totalCount)
+        } else {
+            stringResource(R.string.batch_summary_all_failed)
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        textAlign = TextAlign.Center
+    )
+
+    if (failedItems.isNotEmpty()) {
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("batch_summary_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.batch_summary_failed_header),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+                failedItems.forEach { item ->
+                    val reason = item.errorReason?.takeIf { it.isNotBlank() }
+                    Text(
+                        text = if (reason != null) {
+                            stringResource(R.string.batch_summary_failed_item, item.appName, reason)
+                        } else {
+                            stringResource(R.string.batch_summary_failed_item_simple, item.appName)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    } else {
+        Surface(
+            color = Color.Transparent,
+            modifier = Modifier.testTag("batch_summary_card")
+        ) {}
+    }
+
+    Button(
+        onClick = onDone,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .testTag("batch_done_button")
+    ) {
+        Text(stringResource(R.string.action_done), fontWeight = FontWeight.Bold)
     }
 }
 

@@ -28,14 +28,19 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -58,6 +63,8 @@ import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.PrimaryBlueDark
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SuccessGreenDark
+import com.example.update.GitHubReleaseInfo
+import com.example.update.UpdateDownloadState
 import com.example.util.FormatUtils
 
 @Composable
@@ -68,7 +75,15 @@ fun HomeScreen(
     onReceiveClick: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    availableUpdate: GitHubReleaseInfo? = null,
+    updateDownloadState: UpdateDownloadState = UpdateDownloadState.Idle,
+    onUpdateNow: (GitHubReleaseInfo) -> Unit = {},
+    onUpdateLater: (GitHubReleaseInfo) -> Unit = {},
+    onOpenInstallPermissionSettings: () -> Unit = {},
+    onRetryInstallUpdate: () -> Unit = {},
+    onOpenUpdateBrowserFallback: (String) -> Unit = {},
+    onDismissUpdateDownload: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
 
@@ -370,6 +385,174 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
         }
+    }
+
+    if (availableUpdate != null && updateDownloadState is UpdateDownloadState.Idle) {
+        val dialogTitle = stringResource(R.string.update_dialog_title)
+        val dialogMessage = stringResource(R.string.update_dialog_message, availableUpdate.tagName)
+        val updateLabel = stringResource(R.string.update_action_update)
+        val laterLabel = stringResource(R.string.update_action_later)
+        AlertDialog(
+            onDismissRequest = { onUpdateLater(availableUpdate) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = {
+                Text(
+                    text = dialogTitle,
+                    modifier = Modifier.testTag("update_dialog_title")
+                )
+            },
+            text = {
+                Text(
+                    text = dialogMessage,
+                    modifier = Modifier.testTag("update_dialog_message")
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onUpdateNow(availableUpdate) },
+                    modifier = Modifier.testTag("update_dialog_confirm_button")
+                ) {
+                    Text(updateLabel)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { onUpdateLater(availableUpdate) },
+                    modifier = Modifier.testTag("update_dialog_later_button")
+                ) {
+                    Text(laterLabel)
+                }
+            }
+        )
+    }
+
+    when (val dlState = updateDownloadState) {
+        is UpdateDownloadState.Downloading -> {
+            val downloadingTitle = stringResource(R.string.update_downloading_title)
+            val progressText = if (dlState.progressPercent >= 0) {
+                stringResource(
+                    R.string.update_downloading_progress,
+                    dlState.versionName,
+                    dlState.progressPercent
+                )
+            } else {
+                stringResource(
+                    R.string.update_downloading_starting,
+                    dlState.versionName
+                )
+            }
+            AlertDialog(
+                onDismissRequest = {},
+                icon = {
+                    Icon(
+                        imageVector = Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = { Text(downloadingTitle) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = progressText,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (dlState.progressPercent >= 0) {
+                            LinearProgressIndicator(
+                                progress = { dlState.progressPercent / 100f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("update_download_progress_bar")
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("update_download_progress_bar")
+                            )
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        is UpdateDownloadState.Installing -> {
+            val downloadingTitle = stringResource(R.string.update_downloading_title)
+            val installingStatus = stringResource(R.string.update_installing_status)
+            AlertDialog(
+                onDismissRequest = {},
+                icon = {
+                    Icon(
+                        imageVector = Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = { Text(downloadingTitle) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = installingStatus,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        is UpdateDownloadState.PermissionRequired -> {
+            val dialogTitle = stringResource(R.string.update_dialog_title)
+            val permissionText = stringResource(R.string.update_permission_needed)
+            val openBrowserLabel = stringResource(R.string.update_action_open_browser)
+            val installNowLabel = stringResource(R.string.update_action_install_now)
+            val allowInstallLabel = stringResource(R.string.update_action_allow_install)
+            AlertDialog(
+                onDismissRequest = onDismissUpdateDownload,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = { Text(dialogTitle) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = permissionText,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(
+                            onClick = { onOpenUpdateBrowserFallback(dlState.releasePageUrl) }
+                        ) {
+                            Text(openBrowserLabel)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = onRetryInstallUpdate) {
+                        Text(installNowLabel)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onOpenInstallPermissionSettings) {
+                        Text(allowInstallLabel)
+                    }
+                }
+            )
+        }
+
+        UpdateDownloadState.Idle,
+        UpdateDownloadState.FallbackOpened -> Unit
     }
 }
 

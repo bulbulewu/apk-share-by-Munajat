@@ -90,6 +90,7 @@ import com.example.ui.components.QrCodeScannerView
 import com.example.ui.components.UnknownSourcesPermissionCard
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.viewmodel.ReceivedAppItem
 import com.example.ui.viewmodel.ReceiverMode
 import com.example.ui.viewmodel.ReceiverViewModel
 import com.example.util.FormatUtils
@@ -108,6 +109,7 @@ fun ReceiverScreen(
     val httpState by viewModel.httpDownloadState.collectAsStateWithLifecycle()
     val installState by viewModel.installState.collectAsStateWithLifecycle()
     val canRequestInstalls by viewModel.canRequestInstalls.collectAsStateWithLifecycle()
+    val receivedApps by viewModel.receivedApps.collectAsStateWithLifecycle()
 
     val requiredPermissions = remember { PermissionHelper.getNearbyTransferPermissions() }
     var missingPerms by remember {
@@ -250,6 +252,7 @@ fun ReceiverScreen(
                         httpState = httpState,
                         installState = installState,
                         canRequestInstalls = canRequestInstalls,
+                        receivedApps = receivedApps,
                         onStartDownload = { url -> viewModel.startHttpDownload(url) },
                         onCancelDownload = { viewModel.cancelAll() },
                         onSwitchToNearby = { viewModel.switchToNearbyMode() },
@@ -257,6 +260,7 @@ fun ReceiverScreen(
                         onInstall = { files, meta ->
                             viewModel.installReceivedApk(files, meta.appName, meta.packageName, meta.isSplitApk)
                         },
+                        onReceiveNextApp = { viewModel.receiveNextHotspotApp() },
                         onOpenInstalled = { pkg ->
                             if (!viewModel.openInstalledApp(pkg)) {
                                 Toast.makeText(
@@ -642,6 +646,7 @@ fun ReceiverScreen(
                                 durationMillis = state.durationMillis,
                                 installState = installState,
                                 canRequestInstalls = canRequestInstalls,
+                                receivedApps = receivedApps,
                                 onOpenUnknownSources = { viewModel.openUnknownAppSourcesSettings() },
                                 onInstallClick = {
                                     viewModel.installReceivedApk(
@@ -651,6 +656,15 @@ fun ReceiverScreen(
                                         isSplitApk = state.metadata.isSplitApk
                                     )
                                 },
+                                onInstallReceivedItem = { item ->
+                                    viewModel.installReceivedApk(
+                                        files = item.savedFiles,
+                                        appName = item.metadata.appName,
+                                        packageName = item.metadata.packageName,
+                                        isSplitApk = item.metadata.isSplitApk
+                                    )
+                                },
+                                onReceiveNextApp = { viewModel.receiveNextNearbyApp() },
                                 onOpenAppClick = {
                                     if (!viewModel.openInstalledApp(state.metadata.packageName)) {
                                         Toast.makeText(
@@ -737,11 +751,13 @@ private fun HotspotReceiverContent(
     httpState: HttpDownloadState,
     installState: InstallState,
     canRequestInstalls: Boolean,
+    receivedApps: List<ReceivedAppItem>,
     onStartDownload: (String) -> Unit,
     onCancelDownload: () -> Unit,
     onSwitchToNearby: () -> Unit,
     onOpenUnknownSources: () -> Unit,
     onInstall: (List<File>, ApkBundleMetadata) -> Unit,
+    onReceiveNextApp: () -> Unit,
     onOpenInstalled: (String) -> Unit,
     onDone: () -> Unit
 ) {
@@ -883,8 +899,11 @@ private fun HotspotReceiverContent(
                 durationMillis = httpState.durationMillis,
                 installState = installState,
                 canRequestInstalls = canRequestInstalls,
+                receivedApps = receivedApps,
                 onOpenUnknownSources = onOpenUnknownSources,
                 onInstallClick = { onInstall(httpState.savedFiles, httpState.metadata) },
+                onInstallReceivedItem = { item -> onInstall(item.savedFiles, item.metadata) },
+                onReceiveNextApp = onReceiveNextApp,
                 onOpenAppClick = { onOpenInstalled(httpState.metadata.packageName) },
                 onDone = onDone
             )
@@ -937,8 +956,11 @@ private fun DownloadCompleteInstallSection(
     durationMillis: Long,
     installState: InstallState,
     canRequestInstalls: Boolean,
+    receivedApps: List<ReceivedAppItem>,
     onOpenUnknownSources: () -> Unit,
     onInstallClick: () -> Unit,
+    onInstallReceivedItem: (ReceivedAppItem) -> Unit,
+    onReceiveNextApp: () -> Unit,
     onOpenAppClick: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -1131,6 +1153,68 @@ private fun DownloadCompleteInstallSection(
                         .height(52.dp)
                 ) {
                     Text(stringResource(R.string.receiver_retry_install), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        OutlinedButton(
+            onClick = onReceiveNextApp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("receiver_receive_next_button")
+        ) {
+            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(R.string.receiver_receive_next_app), fontWeight = FontWeight.SemiBold)
+        }
+
+        if (receivedApps.size > 1) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("receiver_batch_list_card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.receiver_received_batch_title, receivedApps.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    receivedApps.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.metadata.appName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "v${item.metadata.versionName} · ${FormatUtils.formatBytes(item.metadata.totalSizeBytes)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(
+                                onClick = { onInstallReceivedItem(item) },
+                                enabled = canRequestInstalls,
+                                modifier = Modifier.testTag("install_batch_item_${item.metadata.packageName}")
+                            ) {
+                                Text(stringResource(R.string.receiver_install_short))
+                            }
+                        }
+                    }
                 }
             }
         }

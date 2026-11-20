@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.ui.theme.ThemePreference
@@ -23,7 +24,10 @@ data class UserSettings(
     val biometricLockEnabled: Boolean = false,
     val exportToPublicDownloads: Boolean = true,
     val powerSaverEnabled: Boolean = false,
-    val language: String = LocaleHelper.LANGUAGE_SYSTEM
+    val language: String = LocaleHelper.LANGUAGE_SYSTEM,
+    val notifyAboutUpdates: Boolean = true,
+    val lastUpdateCheckMillis: Long = 0L,
+    val skippedUpdateVersion: String = ""
 )
 
 fun defaultDeviceLabel(): String {
@@ -46,6 +50,9 @@ class SettingsDataStore(private val context: Context) {
         val PUBLIC_DOWNLOADS = booleanPreferencesKey("public_downloads")
         val POWER_SAVER = booleanPreferencesKey("power_saver")
         val LANGUAGE = stringPreferencesKey("language")
+        val NOTIFY_ABOUT_UPDATES = booleanPreferencesKey("notify_about_updates")
+        val LAST_UPDATE_CHECK_MILLIS = longPreferencesKey("last_update_check_millis")
+        val SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
     }
 
     fun getCachedLanguage(): String = LocaleHelper.getSavedLanguageSync(context)
@@ -61,7 +68,10 @@ class SettingsDataStore(private val context: Context) {
             biometricLockEnabled = prefs[Keys.BIOMETRIC_LOCK] ?: false,
             exportToPublicDownloads = prefs[Keys.PUBLIC_DOWNLOADS] ?: true,
             powerSaverEnabled = prefs[Keys.POWER_SAVER] ?: false,
-            language = language
+            language = language,
+            notifyAboutUpdates = prefs[Keys.NOTIFY_ABOUT_UPDATES] ?: true,
+            lastUpdateCheckMillis = prefs[Keys.LAST_UPDATE_CHECK_MILLIS] ?: 0L,
+            skippedUpdateVersion = prefs[Keys.SKIPPED_UPDATE_VERSION].orEmpty()
         )
     }
 
@@ -100,6 +110,24 @@ class SettingsDataStore(private val context: Context) {
         LocaleHelper.saveLanguageSync(context, normalized)
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.LANGUAGE] = normalized
+        }
+    }
+
+    suspend fun setNotifyAboutUpdates(enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.NOTIFY_ABOUT_UPDATES] = enabled
+        }
+    }
+
+    suspend fun recordLastUpdateCheckMillis(timestampMillis: Long) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.LAST_UPDATE_CHECK_MILLIS] = timestampMillis
+        }
+    }
+
+    suspend fun setSkippedUpdateVersion(version: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.SKIPPED_UPDATE_VERSION] = version.trim()
         }
     }
 }

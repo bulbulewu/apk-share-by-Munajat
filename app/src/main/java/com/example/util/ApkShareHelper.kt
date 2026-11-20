@@ -3,11 +3,15 @@ package com.example.util
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
@@ -246,6 +250,223 @@ object ApkShareHelper {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
+    }
+
+    /**
+     * Builds the Android system share sheet chooser [Intent] for one or more APKs/bundles.
+     * - 1 item: delegates to [createShareChooserIntent] (`Intent.ACTION_SEND`) unchanged.
+     * - 2+ items: uses `Intent.ACTION_SEND_MULTIPLE` with `FileProvider` URIs, multi-item
+     *   [ClipData], and [Intent.FLAG_GRANT_READ_URI_PERMISSION].
+     */
+    fun createMultipleShareChooserIntent(
+        context: Context,
+        items: List<ShareableApkResult>
+    ): Intent {
+        require(items.isNotEmpty()) { "At least one APK is required to share" }
+        if (items.size == 1) {
+            val single = items.first()
+            return createShareChooserIntent(
+                context = context,
+                file = single.file,
+                appName = single.appName,
+                isSplitBundle = single.isSplitBundle
+            )
+        }
+
+        val loc = LocaleHelper.localizedContext(context)
+        val uris = ArrayList<Uri>(items.size)
+        items.forEach { item ->
+            uris.add(getFileProviderUri(context, item.file))
+        }
+
+        val allSingle = items.all { !it.isSplitBundle }
+        val allSplit = items.all { it.isSplitBundle }
+        val mimeType = when {
+            allSingle -> MIME_TYPE_APK
+            allSplit -> MIME_TYPE_APKS
+            else -> "*/*"
+        }
+
+        val combinedClipData = ClipData.newUri(context.contentResolver, items.first().file.name, uris.first()).apply {
+            for (i in 1 until uris.size) {
+                addItem(ClipData.Item(uris[i]))
+            }
+        }
+
+        val sendIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = mimeType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            putExtra(Intent.EXTRA_SUBJECT, loc.getString(R.string.share_multiple_subject, items.size))
+            clipData = combinedClipData
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val chooserTitle = loc.getString(R.string.share_multiple_chooser_title, items.size)
+        return Intent.createChooser(sendIntent, chooserTitle).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (!hasActivityContext(context)) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+    }
+
+    fun launchShareMultipleSheet(
+        context: Context,
+        items: List<ShareableApkResult>
+    ): Boolean {
+        if (items.isEmpty()) return false
+        if (items.size == 1) {
+            val single = items.first()
+            return launchShareSheet(context, single.file, single.appName, single.isSplitBundle)
+        }
+        return try {
+            val chooser = createMultipleShareChooserIntent(context, items)
+            context.startActivity(chooser)
+            true
+        } catch (anf: ActivityNotFoundException) {
+            Log.w(TAG, "No share target app available for ${items.size} APKs", anf)
+            false
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to launch system multi-share sheet for ${items.size} APKs", t)
+            false
+        }
+    }
+
+    /**
+     * Generates a non-colliding file name in the form `<baseName>.<extension>`, or
+     * `<baseName>_1.<extension>`, `<baseName>_2.<extension>`, ... when a file already exists.
+     */
+    fun resolveUniqueFileName(
+        baseName: String,
+        extension: String,
+        exists: (String) -> Boolean
+    ): String {
+        val cleanBase = baseName.ifBlank { "App" }
+        val cleanExt = extension.trimStart('.').ifBlank { "apk" }
+        val initial = "$cleanBase.$cleanExt"
+        if (!exists(initial)) return initial
+        var counter = 1
+        while (counter < 10_000) {
+            val candidate = "${cleanBase}_${counter}.$cleanExt"
+            if (!exists(candidate)) return candidate
+            counter++
+        }
+        return "${cleanBase}_${System.currentTimeMillis()}.$cleanExt"
+    }
+
+    /**
+     * Saves an extracted APK or `.apks` bundle into the public `Downloads/APK Share/` folder
+     * using `MediaStore` on Android 10+ (zero permissions) so it appears immediately in the
+     * phone's Files app. Adds `_1`, `_2`, ... suffix when a file with the same name exists.
+     */
+    suspend fun saveApkToPublicDownloads(
+        context: Context,
+        sourceFile: File,
+        appName: String,
+        versionName: String,
+        isSplitBundle: Boolean
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!sourceFile.exists() || sourceFile.length() <= 0L) {
+                throw IOException("Source APK file is missing: ${sourceFile.name}")
+            }
+            val safeName = FormatUtils.sanitizeFileName(appName)
+            val safeVer = FormatUtils.sanitizeFileName(versionName)
+            val baseName = "${safeName}_v${safeVer}"
+            val extension = if (isSplitBundle) "apks" else "apk"
+            val relativeSubFolder = "${Environment.DIRECTORY_DOWNLOADS}/APK Share"
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val existingNames = queryExistingDownloadNames(resolver, relativeSubFolder)
+                val targetFileName = resolveUniqueFileName(baseName, extension) { candidate ->
+                    candidate.lowercase() in existingNames
+                }
+
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, targetFileName)
+                    put(MediaStore.Downloads.MIME_TYPE, mimeTypeFor(isSplitBundle))
+                    put(MediaStore.Downloads.RELATIVE_PATH, relativeSubFolder)
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IOException("Could not create Downloads entry for $targetFileName")
+                try {
+                    val outStream = resolver.openOutputStream(uri)
+                        ?: throw IOException("Could not open Downloads output stream for $targetFileName")
+                    outStream.use { out ->
+                        sourceFile.inputStream().use { input ->
+                            input.copyTo(out, bufferSize = 65536)
+                        }
+                    }
+                    values.clear()
+                    values.put(MediaStore.Downloads.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    Log.i(TAG, "Saved $targetFileName to $relativeSubFolder via MediaStore")
+                    targetFileName
+                } catch (t: Throwable) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw t
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val targetDir = File(publicDownloads, "APK Share").apply { mkdirs() }
+                if (!targetDir.exists() || !targetDir.isDirectory) {
+                    throw IOException("Could not create Downloads/APK Share directory")
+                }
+                val targetFileName = resolveUniqueFileName(baseName, extension) { candidate ->
+                    File(targetDir, candidate).exists()
+                }
+                val destFile = File(targetDir, targetFileName)
+                sourceFile.inputStream().use { input ->
+                    destFile.outputStream().use { out ->
+                        input.copyTo(out, bufferSize = 65536)
+                    }
+                }
+                runCatching {
+                    MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(destFile.absolutePath),
+                        arrayOf(mimeTypeFor(isSplitBundle)),
+                        null
+                    )
+                }
+                Log.i(TAG, "Saved $targetFileName to ${targetDir.absolutePath}")
+                targetFileName
+            }
+        }
+    }
+
+    private fun queryExistingDownloadNames(
+        resolver: android.content.ContentResolver,
+        relativeSubFolder: String
+    ): Set<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptySet()
+        val names = mutableSetOf<String>()
+        runCatching {
+            val projection = arrayOf(MediaStore.Downloads.DISPLAY_NAME)
+            val selection = "${MediaStore.Downloads.RELATIVE_PATH} LIKE ?"
+            val selectionArgs = arrayOf("${relativeSubFolder}%")
+            resolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )?.use { cursor ->
+                val nameCol = cursor.getColumnIndex(MediaStore.Downloads.DISPLAY_NAME)
+                if (nameCol >= 0) {
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameCol)
+                        if (!name.isNullOrBlank()) {
+                            names.add(name.lowercase())
+                        }
+                    }
+                }
+            }
+        }
+        return names
     }
 
     private fun hasActivityContext(context: Context): Boolean {

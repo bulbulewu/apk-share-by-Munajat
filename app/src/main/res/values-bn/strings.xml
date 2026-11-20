@@ -77,7 +77,7 @@
     <string name="picker_sort_name">নাম</string>
     <string name="picker_sort_largest">সবচেয়ে বড়</string>
     <string name="picker_sort_newest">সর্বশেষ</string>
-    <string name="picker_single_select_note">শেয়ার করতে ১টি অ্যাপ নির্বাচন করুন (স্প্লিট APK স্বয়ংক্রিয়ভাবে যুক্ত হয় · একাধিক নির্বাচন পরবর্তী আপডেটে আসছে)</string>
+    <string name="picker_single_select_note">শেয়ার করার জন্য অ্যাপ নির্বাচন করুন (স্প্লিট APK স্বয়ংক্রিয়ভাবে যুক্ত হয়)</string>
     <string name="picker_scanning_apps">ইনস্টল করা অ্যাপ খোঁজা হচ্ছে…</string>
     <string name="picker_empty_apps">কোনো ইউজার অ্যাপ পাওয়া যায়নি।</string>
     <string name="picker_empty_search">\"%1$s\"-এর সাথে মিল আছে এমন কোনো অ্যাপ পাওয়া যায়নি।</string>
@@ -404,4 +404,56 @@
     <string name="share_no_app_error">এই ফাইলটি শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি।</string>
     <string name="share_failed_error">%1$s শেয়ার করা যায়নি।</string>
     <string name="share_history_file_missing">এই ডিভাইসে APK ফাইলটি আর পাওয়া যাচ্ছে না।</string>
+
+    <!-- In-App GitHub Update Checker -->
+    <string name="update_dialog_title">নতুন সংস্করণ উপলব্ধ</string>
+    <string name="update_dialog_message">APK Share %1$s উপলব্ধ হয়েছে। সর্বশেষ উন্নতি পেতে এখনই আপডেট করুন।</string>
+    <string name="update_action_update">আপডেট</string>
+    <string name="update_action_later">পরে</string>
+    <string name="update_downloading_title">আপডেট ডাউনলোড হচ্ছে…</string>
+    <string name="update_downloading_progress">ডাউনলোড হচ্ছে %1$s (%2$d%%)</string>
+    <string name="update_downloading_starting">%1$s ডাউনলোড শুরু হচ্ছে…</string>
+    <string name="update_installing_status">সিস্টেম ইনস্টলার খোলা হচ্ছে…</string>
+    <string name="update_permission_needed">APK Share-এর জন্য \"অজানা অ্যাপ ইনস্টল\" অনুমতি দিন, তারপর ইনস্টল ট্যাপ করুন।</string>
+    <string name="update_action_allow_install">অনুমতি দিন</string>
+    <string name="update_action_install_now">ইনস্টল</string>
+    <string name="update_action_open_browser">ব্রাউজারে ডাউনলোড</string>
+    <string name="update_fallback_browser_toast">ম্যানুয়ালি ডাউনলোড করতে GitHub রিলিজ পেজ খোলা হচ্ছে…</string>
+    <string name="settings_updates_title">অ্যাপ আপডেট</string>
+    <string name="settings_check_updates_title">আপডেট পরীক্ষা করুন</string>
+    <string name="settings_check_updates_desc">APK Share-এর নতুন সংস্করণের জন্য GitHub পরীক্ষা করুন</string>
+    <string name="settings_notify_updates_title">নতুন আপডেটের বিজ্ঞপ্তি দিন</string>
+    <string name="settings_notify_updates_desc">ইন্টারনেট থাকলে দিনে একবার স্বয়ংক্রিয়ভাবে পরীক্ষা করুন এবং আপডেট বার্তা দেখান</string>
+    <string name="update_checking">আপডেট পরীক্ষা করা হচ্ছে…</string>
+    <string name="update_new_version_available">নতুন সংস্করণ %1$s উপলব্ধ</string>
+    <string name="update_up_to_date">আপনার কাছে সর্বশেষ সংস্করণ রয়েছে</string>
+    <string name="update_check_failed">এই মুহূর্তে আপডেট পরীক্ষা করা যায়নি।</string>
+    <string name="update_notification_desc">APK Share %1$s ডাউনলোড হচ্ছে</string>
+    <string name="update_check_button">পরীক্ষা</string>
+
+    <!-- Multi-select Batch Send & Save to Downloads -->
+    <string name="picker_one_app_selected">১টি অ্যাপ নির্বাচিত</string>
+    <string name="picker_apps_selected_count">%1$dটি অ্যাপ নির্বাচিত</string>
+    <string name="picker_not_selected_cd">নির্বাচিত নয়</string>
+    <string name="picker_saving_apk">সংরক্ষণ হচ্ছে…</string>
+    <string name="save_apk_cd">ডাউনলোডে সংরক্ষণ করুন</string>
+    <string name="save_downloads_success_single">Downloads/APK Share ফোল্ডারে সংরক্ষিত হয়েছে</string>
+    <string name="save_downloads_success_multiple">%1$dটি অ্যাপ Downloads/APK Share ফোল্ডারে সংরক্ষিত হয়েছে</string>
+    <string name="save_downloads_partial">%2$dটির মধ্যে %1$dটি অ্যাপ Downloads/APK Share ফোল্ডারে সংরক্ষিত হয়েছে</string>
+    <string name="save_downloads_failed">ডাউনলোড ফোল্ডারে APK সংরক্ষণ করা যায়নি।</string>
+    <string name="share_multiple_chooser_title">%1$dটি অ্যাপ শেয়ার করুন…</string>
+    <string name="share_multiple_subject">%1$dটি APK ফাইল</string>
+    <string name="batch_sending_progress">%2$dটির মধ্যে %1$dটি পাঠানো হচ্ছে — %3$s</string>
+    <string name="batch_preparing_next">%2$dটির মধ্যে %1$dটি প্রস্তুত হচ্ছে — %3$s…</string>
+    <string name="batch_summary_title">ব্যাচ ট্রান্সফার সম্পন্ন</string>
+    <string name="batch_summary_sent_count">%2$dটির মধ্যে %1$dটি অ্যাপ পাঠানো হয়েছে</string>
+    <string name="batch_summary_all_failed">নির্বাচিত অ্যাপগুলো পাঠানো যায়নি।</string>
+    <string name="batch_summary_failed_header">ব্যর্থ অ্যাপসমূহ:</string>
+    <string name="batch_summary_failed_item">ব্যর্থ: %1$s (%2$s)</string>
+    <string name="batch_summary_failed_item_simple">ব্যর্থ: %1$s</string>
+    <string name="batch_hotspot_next_app">পরবর্তী অ্যাপ (%1$d/%2$d)</string>
+    <string name="batch_hotspot_skip_app">অ্যাপ এড়িয়ে যান</string>
+    <string name="receiver_receive_next_app">পরবর্তী অ্যাপ গ্রহণ করুন</string>
+    <string name="receiver_received_batch_title">গৃহীত অ্যাপসমূহ (%1$d)</string>
+    <string name="receiver_install_short">ইনস্টল</string>
 </resources>

@@ -112,8 +112,10 @@ class MainActivity : FragmentActivity() {
         setContent {
             val mainViewModel: MainViewModel = viewModel(
                 factory = MainViewModel.Factory(
-                    container.settingsDataStore,
-                    container.historyRepository
+                    settingsDataStore = container.settingsDataStore,
+                    historyRepository = container.historyRepository,
+                    appUpdateChecker = container.appUpdateChecker,
+                    appUpdateDownloader = container.appUpdateDownloader
                 )
             )
             val senderViewModel: SenderViewModel = viewModel(
@@ -141,6 +143,9 @@ class MainActivity : FragmentActivity() {
             val history by mainViewModel.history.collectAsStateWithLifecycle()
             val isLocked by mainViewModel.isLocked.collectAsStateWithLifecycle()
             val lockChecked by mainViewModel.lockChecked.collectAsStateWithLifecycle()
+            val homeUpdatePrompt by mainViewModel.homeUpdatePrompt.collectAsStateWithLifecycle()
+            val manualUpdateState by mainViewModel.manualUpdateState.collectAsStateWithLifecycle()
+            val updateDownloadState by mainViewModel.updateDownloadState.collectAsStateWithLifecycle()
 
             LaunchedEffect(settings.powerSaverEnabled) {
                 container.nearbyTransferManager.powerSaverEnabled = settings.powerSaverEnabled
@@ -151,6 +156,12 @@ class MainActivity : FragmentActivity() {
             LaunchedEffect(lockChecked, settings.language) {
                 if (lockChecked) {
                     LocaleHelper.applyAppLocale(this@MainActivity, settings.language)
+                }
+            }
+
+            LaunchedEffect(lockChecked, isLocked) {
+                if (lockChecked && !isLocked) {
+                    mainViewModel.checkForUpdatesAutomaticallyIfDue()
                 }
             }
 
@@ -207,6 +218,9 @@ class MainActivity : FragmentActivity() {
                                 receiverViewModel = receiverViewModel,
                                 settings = settings,
                                 history = history,
+                                homeUpdatePrompt = homeUpdatePrompt,
+                                manualUpdateState = manualUpdateState,
+                                updateDownloadState = updateDownloadState,
                                 sharingHistoryItemId = sharingHistoryItemId,
                                 onShareHistoryItem = { item ->
                                     if (sharingHistoryItemId != null) return@ApkShareNavHost
@@ -317,6 +331,9 @@ private fun ApkShareNavHost(
     receiverViewModel: ReceiverViewModel,
     settings: com.example.data.prefs.UserSettings,
     history: List<com.example.data.db.TransferHistoryEntity>,
+    homeUpdatePrompt: com.example.update.GitHubReleaseInfo?,
+    manualUpdateState: com.example.update.ManualUpdateCheckUiState,
+    updateDownloadState: com.example.update.UpdateDownloadState,
     sharingHistoryItemId: Long?,
     onShareHistoryItem: (com.example.data.db.TransferHistoryEntity) -> Unit,
     onLanguageSelected: (String) -> Unit
@@ -442,7 +459,15 @@ private fun ApkShareNavHost(
                             onSendClick = { navController.navigate(AppPickerRoute) },
                             onReceiveClick = { navController.navigate(ReceiverRoute) },
                             onOpenHistory = { navigateTab(HistoryRoute) },
-                            onOpenSettings = { navigateTab(SettingsRoute) }
+                            onOpenSettings = { navigateTab(SettingsRoute) },
+                            availableUpdate = homeUpdatePrompt,
+                            updateDownloadState = updateDownloadState,
+                            onUpdateNow = { mainViewModel.startAppUpdate(it) },
+                            onUpdateLater = { mainViewModel.deferUpdateForLater(it) },
+                            onOpenInstallPermissionSettings = { mainViewModel.openInstallPermissionSettings() },
+                            onRetryInstallUpdate = { mainViewModel.retryInstallDownloadedUpdate() },
+                            onOpenUpdateBrowserFallback = { mainViewModel.openUpdateBrowserFallback(it) },
+                            onDismissUpdateDownload = { mainViewModel.dismissUpdateDownloadUi() }
                         )
                     }
 
@@ -464,7 +489,15 @@ private fun ApkShareNavHost(
                             onToggleBiometric = { mainViewModel.setBiometricLockEnabled(it) },
                             onTogglePublicDownloads = { mainViewModel.setExportToPublicDownloads(it) },
                             onTogglePowerSaver = { mainViewModel.setPowerSaverEnabled(it) },
-                            onUpdateLanguage = onLanguageSelected
+                            onUpdateLanguage = onLanguageSelected,
+                            manualUpdateState = manualUpdateState,
+                            updateDownloadState = updateDownloadState,
+                            onToggleNotifyUpdates = { mainViewModel.setNotifyAboutUpdates(it) },
+                            onCheckForUpdates = { mainViewModel.checkForUpdatesManually() },
+                            onStartUpdateDownload = { mainViewModel.startAppUpdate(it) },
+                            onOpenInstallPermissionSettings = { mainViewModel.openInstallPermissionSettings() },
+                            onRetryInstallUpdate = { mainViewModel.retryInstallDownloadedUpdate() },
+                            onOpenUpdateBrowserFallback = { mainViewModel.openUpdateBrowserFallback(it) }
                         )
                     }
 

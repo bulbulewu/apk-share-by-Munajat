@@ -16,7 +16,10 @@ import java.util.UUID
 
 class ApkExtractor(private val context: Context) {
 
-    suspend fun extractBundle(app: InstalledAppInfo): Result<ExtractedApkBundle> =
+    suspend fun extractBundle(
+        app: InstalledAppInfo,
+        cleanPrevious: Boolean = true
+    ): Result<ExtractedApkBundle> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val loc = LocaleHelper.localizedContext(context)
@@ -26,9 +29,11 @@ class ApkExtractor(private val context: Context) {
                 }
 
                 val outgoingRoot = File(context.cacheDir, "outgoing_apks").apply { mkdirs() }
-                // Clean previous staged bundles to keep cache compact
-                outgoingRoot.listFiles()?.forEach { old ->
-                    old.deleteRecursively()
+                if (cleanPrevious) {
+                    // Clean previous staged bundles to keep cache compact
+                    outgoingRoot.listFiles()?.forEach { old ->
+                        old.deleteRecursively()
+                    }
                 }
 
                 val requiredBytes = app.totalSizeBytes + (10L * 1024L * 1024L)

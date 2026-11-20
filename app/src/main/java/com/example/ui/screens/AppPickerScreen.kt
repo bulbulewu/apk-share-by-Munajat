@@ -24,7 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
@@ -42,10 +44,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -87,9 +89,12 @@ fun AppPickerScreen(
     val appsState by viewModel.appsUiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
-    val selectedApp by viewModel.selectedApp.collectAsStateWithLifecycle()
+    val selectedPackageNames by viewModel.selectedPackageNames.collectAsStateWithLifecycle()
+    val selectedApps by viewModel.selectedApps.collectAsStateWithLifecycle()
     val extractionState by viewModel.extractionState.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSavingToDownloads.collectAsStateWithLifecycle()
     val isExtracting = extractionState is ExtractionUiState.Extracting
+    val isBusy = isExtracting || isSaving
 
     val shareApp: (InstalledAppInfo) -> Unit = { targetApp ->
         viewModel.prepareAndShareApp(
@@ -117,6 +122,61 @@ fun AppPickerScreen(
                 ).show()
             }
         )
+    }
+
+    val shareSelectedApps: () -> Unit = {
+        val targets = selectedApps
+        if (targets.isNotEmpty()) {
+            viewModel.prepareAndShareSelectedApps(
+                apps = targets,
+                onReadyToShare = { shareables ->
+                    val launched = ApkShareHelper.launchShareMultipleSheet(
+                        context = context,
+                        items = shareables
+                    )
+                    if (!launched) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.share_no_app_error),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                onError = { errMsg ->
+                    val fallbackName = targets.firstOrNull()?.appName.orEmpty()
+                    Toast.makeText(
+                        context,
+                        errMsg ?: context.getString(R.string.share_failed_error, fallbackName),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+    }
+
+    val saveSelectedApps: () -> Unit = {
+        val targets = selectedApps
+        if (targets.isNotEmpty()) {
+            viewModel.saveSelectedAppsToDownloads(
+                context = context,
+                apps = targets
+            ) { savedCount, totalCount ->
+                val toastMessage = when {
+                    savedCount <= 0 -> context.getString(R.string.save_downloads_failed)
+                    totalCount == 1 -> context.getString(R.string.save_downloads_success_single)
+                    savedCount == totalCount -> context.getString(
+                        R.string.save_downloads_success_multiple,
+                        savedCount
+                    )
+                    else -> context.getString(
+                        R.string.save_downloads_partial,
+                        savedCount,
+                        totalCount
+                    )
+                }
+                Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     Scaffold(
@@ -149,9 +209,12 @@ fun AppPickerScreen(
             )
         },
         bottomBar = {
-            AnimatedVisibility(visible = selectedApp != null) {
-                val app = selectedApp
-                if (app != null) {
+            AnimatedVisibility(visible = selectedApps.isNotEmpty()) {
+                if (selectedApps.isNotEmpty()) {
+                    val totalSizeBytes = remember(selectedApps) {
+                        selectedApps.sumOf { it.totalSizeBytes }
+                    }
+                    val singleApp = selectedApps.singleOrNull()
                     Surface(
                         shadowElevation = 10.dp,
                         tonalElevation = 4.dp,
@@ -160,7 +223,7 @@ fun AppPickerScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
@@ -168,33 +231,63 @@ fun AppPickerScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = app.appName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = if (app.isSplitApk) {
-                                        stringResource(
-                                            R.string.picker_splits_suffix,
-                                            FormatUtils.formatBytes(app.totalSizeBytes),
-                                            app.totalApkFileCount
-                                        )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (selectedApps.size == 1) {
+                                            stringResource(R.string.picker_one_app_selected)
+                                        } else {
+                                            stringResource(R.string.picker_apps_selected_count, selectedApps.size)
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.testTag("selected_apps_count_text")
+                                    )
+                                    val sizeLabel = if (singleApp != null) {
+                                        if (singleApp.isSplitApk) {
+                                            "${singleApp.appName} · " + stringResource(
+                                                R.string.picker_splits_suffix,
+                                                FormatUtils.formatBytes(singleApp.totalSizeBytes),
+                                                singleApp.totalApkFileCount
+                                            )
+                                        } else {
+                                            "${singleApp.appName} · ${FormatUtils.formatBytes(singleApp.totalSizeBytes)}"
+                                        }
                                     } else {
-                                        FormatUtils.formatBytes(app.totalSizeBytes)
+                                        FormatUtils.formatBytes(totalSizeBytes)
+                                    }
+                                    Text(
+                                        text = sizeLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = PrimaryBlue,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        viewModel.clearExtractionError()
+                                        viewModel.clearSelection()
                                     },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = PrimaryBlue
-                                )
+                                    enabled = !isBusy,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("clear_selection_button")
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_clear),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                             if (extractionState is ExtractionUiState.Error) {
                                 val errorMsg = (extractionState as ExtractionUiState.Error).message
+                                val fallbackName = selectedApps.firstOrNull()?.appName.orEmpty()
                                 Text(
                                     text = errorMsg.ifBlank {
-                                        stringResource(R.string.share_failed_error, app.appName)
+                                        stringResource(R.string.share_failed_error, fallbackName)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
@@ -202,13 +295,15 @@ fun AppPickerScreen(
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Button(
                                     onClick = {
                                         viewModel.prepareAndStartNearbyTransfer(onProceedToTransfer)
                                     },
-                                    enabled = extractionState !is ExtractionUiState.Extracting,
+                                    enabled = !isBusy,
+                                    contentPadding = PaddingValues(horizontal = 12.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = PrimaryBlue,
                                         contentColor = Color.White
@@ -218,25 +313,39 @@ fun AppPickerScreen(
                                         .height(50.dp)
                                         .testTag("send_selected_app_button")
                                 ) {
-                                    if (extractionState is ExtractionUiState.Extracting) {
+                                    if (isBusy) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(18.dp),
                                             strokeWidth = 2.dp,
                                             color = Color.White
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(stringResource(R.string.picker_preparing_apk))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isSaving) {
+                                                stringResource(R.string.picker_saving_apk)
+                                            } else {
+                                                stringResource(R.string.picker_preparing_apk)
+                                            },
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     } else {
                                         Icon(Icons.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(stringResource(R.string.picker_send_nearby), fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = stringResource(R.string.picker_send_nearby),
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
                                 }
                                 OutlinedButton(
                                     onClick = {
                                         viewModel.startHotspotModeDirect(onProceedToTransfer)
                                     },
-                                    enabled = !isExtracting,
+                                    enabled = !isBusy,
+                                    contentPadding = PaddingValues(horizontal = 10.dp),
                                     modifier = Modifier
                                         .height(50.dp)
                                         .testTag("send_hotspot_direct_button")
@@ -244,14 +353,18 @@ fun AppPickerScreen(
                                     Icon(
                                         Icons.Rounded.QrCode2,
                                         contentDescription = stringResource(R.string.picker_hotspot_cd),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(R.string.picker_hotspot_button))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.picker_hotspot_button),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                                 OutlinedIconButton(
-                                    onClick = { shareApp(app) },
-                                    enabled = !isExtracting,
+                                    onClick = shareSelectedApps,
+                                    enabled = !isBusy,
                                     modifier = Modifier
                                         .size(50.dp)
                                         .minimumInteractiveComponentSize()
@@ -260,6 +373,20 @@ fun AppPickerScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.Share,
                                         contentDescription = stringResource(R.string.share_apk_cd),
+                                        tint = PrimaryBlue
+                                    )
+                                }
+                                OutlinedIconButton(
+                                    onClick = saveSelectedApps,
+                                    enabled = !isBusy,
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("save_selected_apps_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = stringResource(R.string.save_apk_cd),
                                         tint = PrimaryBlue
                                     )
                                 }
@@ -400,15 +527,15 @@ fun AppPickerScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(state.apps, key = { it.packageName }) { app ->
-                                    val isSelected = selectedApp?.packageName == app.packageName
+                                    val isSelected = selectedPackageNames.contains(app.packageName)
                                     AppListItemCard(
                                         app = app,
                                         isSelected = isSelected,
-                                        isExtracting = isExtracting,
+                                        isBusy = isBusy,
                                         loadIcon = { viewModel.loadIcon(app.packageName) },
                                         onClick = {
                                             viewModel.clearExtractionError()
-                                            viewModel.selectApp(app)
+                                            viewModel.toggleAppSelection(app)
                                         },
                                         onShareClick = { shareApp(app) }
                                     )
@@ -426,7 +553,7 @@ fun AppPickerScreen(
 private fun AppListItemCard(
     app: InstalledAppInfo,
     isSelected: Boolean,
-    isExtracting: Boolean,
+    isBusy: Boolean,
     loadIcon: suspend () -> ImageBitmap?,
     onClick: () -> Unit,
     onShareClick: () -> Unit
@@ -514,7 +641,7 @@ private fun AppListItemCard(
             }
             IconButton(
                 onClick = onShareClick,
-                enabled = !isExtracting,
+                enabled = !isBusy,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("share_app_button_${app.packageName}")
@@ -525,19 +652,22 @@ private fun AppListItemCard(
                     tint = PrimaryBlue
                 )
             }
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = stringResource(R.string.picker_selected_cd),
-                    tint = PrimaryBlue,
-                    modifier = Modifier.size(24.dp)
-                )
-            } else {
-                RadioButton(
-                    selected = false,
-                    onClick = onClick
-                )
-            }
+            Icon(
+                imageVector = if (isSelected) {
+                    Icons.Rounded.CheckCircle
+                } else {
+                    Icons.Rounded.RadioButtonUnchecked
+                },
+                contentDescription = if (isSelected) {
+                    stringResource(R.string.picker_selected_cd)
+                } else {
+                    stringResource(R.string.picker_not_selected_cd)
+                },
+                tint = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(24.dp)
+                    .testTag("app_select_indicator_${app.packageName}")
+            )
         }
     }
 }

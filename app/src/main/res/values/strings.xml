@@ -77,7 +77,7 @@
     <string name="picker_sort_name">Name</string>
     <string name="picker_sort_largest">Largest</string>
     <string name="picker_sort_newest">Newest</string>
-    <string name="picker_single_select_note">Select 1 app to share (Split APKs are bundled automatically · Multi-select coming in next update)</string>
+    <string name="picker_single_select_note">Select apps to share (Split APKs are bundled automatically)</string>
     <string name="picker_scanning_apps">Scanning user apps…</string>
     <string name="picker_empty_apps">No user-installed apps found.</string>
     <string name="picker_empty_search">No apps match \"%1$s\".</string>
@@ -404,4 +404,56 @@
     <string name="share_no_app_error">No app available to share this file.</string>
     <string name="share_failed_error">Could not share %1$s.</string>
     <string name="share_history_file_missing">APK file is no longer available on this device.</string>
+
+    <!-- In-App GitHub Update Checker -->
+    <string name="update_dialog_title">New version available</string>
+    <string name="update_dialog_message">APK Share %1$s is available. Update now to get the latest improvements.</string>
+    <string name="update_action_update">Update</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_downloading_title">Downloading update…</string>
+    <string name="update_downloading_progress">Downloading %1$s (%2$d%%)</string>
+    <string name="update_downloading_starting">Starting download of %1$s…</string>
+    <string name="update_installing_status">Opening system installer…</string>
+    <string name="update_permission_needed">Allow \"Install unknown apps\" for APK Share, then tap Install.</string>
+    <string name="update_action_allow_install">Allow permission</string>
+    <string name="update_action_install_now">Install</string>
+    <string name="update_action_open_browser">Download in browser</string>
+    <string name="update_fallback_browser_toast">Opening GitHub releases page to download manually…</string>
+    <string name="settings_updates_title">App updates</string>
+    <string name="settings_check_updates_title">Check for updates</string>
+    <string name="settings_check_updates_desc">Check GitHub for a newer release of APK Share</string>
+    <string name="settings_notify_updates_title">Notify about new updates</string>
+    <string name="settings_notify_updates_desc">Automatically check once a day when online and show an update prompt</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_new_version_available">New version %1$s available</string>
+    <string name="update_up_to_date">You have the latest version</string>
+    <string name="update_check_failed">Could not check for updates right now.</string>
+    <string name="update_notification_desc">Downloading APK Share %1$s</string>
+    <string name="update_check_button">Check</string>
+
+    <!-- Multi-select Batch Send & Save to Downloads -->
+    <string name="picker_one_app_selected">1 app selected</string>
+    <string name="picker_apps_selected_count">%1$d apps selected</string>
+    <string name="picker_not_selected_cd">Not selected</string>
+    <string name="picker_saving_apk">Saving…</string>
+    <string name="save_apk_cd">Save to Downloads</string>
+    <string name="save_downloads_success_single">Saved to Downloads/APK Share</string>
+    <string name="save_downloads_success_multiple">Saved %1$d apps to Downloads/APK Share</string>
+    <string name="save_downloads_partial">Saved %1$d of %2$d apps to Downloads/APK Share</string>
+    <string name="save_downloads_failed">Could not save APK to Downloads.</string>
+    <string name="share_multiple_chooser_title">Share %1$d apps via…</string>
+    <string name="share_multiple_subject">%1$d APK files</string>
+    <string name="batch_sending_progress">Sending %1$d of %2$d — %3$s</string>
+    <string name="batch_preparing_next">Preparing %1$d of %2$d — %3$s…</string>
+    <string name="batch_summary_title">Batch Transfer Complete</string>
+    <string name="batch_summary_sent_count">%1$d of %2$d apps sent</string>
+    <string name="batch_summary_all_failed">Could not send the selected apps.</string>
+    <string name="batch_summary_failed_header">Failed apps:</string>
+    <string name="batch_summary_failed_item">Failed: %1$s (%2$s)</string>
+    <string name="batch_summary_failed_item_simple">Failed: %1$s</string>
+    <string name="batch_hotspot_next_app">Next App (%1$d/%2$d)</string>
+    <string name="batch_hotspot_skip_app">Skip App</string>
+    <string name="receiver_receive_next_app">Receive Next App</string>
+    <string name="receiver_received_batch_title">Received Apps (%1$d)</string>
+    <string name="receiver_install_short">Install</string>
 </resources>
