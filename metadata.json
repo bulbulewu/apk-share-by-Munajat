@@ -1,0 +1,6 @@
+{
+  "name": "APK Share",
+  "description": "Fast offline peer-to-peer Android app and split-APK transfer via Nearby Connections and Wi-Fi Hotspot HTTP with system installer support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APK Share</string>
+    <string name="app_subtitle">Fast Transfer</string>
+    <string name="home_tagline">Transfer installed apps offline between phones in seconds</string>
+    <string name="send_title">SEND</string>
+    <string name="send_subtitle">Send an installed app</string>
+    <string name="receive_title">RECEIVE</string>
+    <string name="receive_subtitle">Receive an app nearby</string>
+    <string name="how_to_use_title">How to use (3 simple steps)</string>
+    <string name="step_1_title">1. Pick an App</string>
+    <string name="step_1_desc">Phone A taps SEND and selects any installed app (supports split APKs).</string>
+    <string name="step_2_title">2. Connect Offline</string>
+    <string name="step_2_desc">Phone B taps RECEIVE to pair via Nearby, or scans the Hotspot QR code.</string>
+    <string name="step_3_title">3. Download &amp; Install</string>
+    <string name="step_3_desc">APK downloads to Downloads/APK Share and installs with one tap.</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="limitations_title">Important Limitations</string>
+    <string name="limitations_body">App data (login sessions, chats, settings, and saved game progress) is NOT transferred — only the APK installation file(s) are transferred. Some paid apps, DRM-protected apps, and banking apps may refuse to install from an extracted APK. System apps cannot be shared.</string>
+    <string name="unknown_sources_explanation">Please allow Install unknown apps for APK Share, then come back and tap Install again.</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="notification_channel_name">APK Transfers</string>
+    <string name="notification_channel_desc">Shows live progress and completion alerts for app transfers</string>
+</resources>
