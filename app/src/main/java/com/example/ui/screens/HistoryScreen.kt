@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,9 +22,11 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,10 +43,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.db.TransferHistoryEntity
 import com.example.model.TransferDirection
 import com.example.model.TransferMethod
@@ -60,6 +63,8 @@ fun HistoryScreen(
     history: List<TransferHistoryEntity>,
     onDeleteItem: (Long) -> Unit,
     onClearAll: () -> Unit,
+    onShareItem: (TransferHistoryEntity) -> Unit = {},
+    sharingItemId: Long? = null,
     modifier: Modifier = Modifier
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -67,8 +72,8 @@ fun HistoryScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("Clear Transfer History?") },
-            text = { Text("This removes your saved list of recent sent and received apps.") },
+            title = { Text(stringResource(R.string.history_clear_dialog_title)) },
+            text = { Text(stringResource(R.string.history_clear_dialog_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -76,12 +81,12 @@ fun HistoryScreen(
                         showClearConfirm = false
                     }
                 ) {
-                    Text("Clear", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_clear), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -106,12 +111,12 @@ fun HistoryScreen(
             ) {
                 Column {
                     Text(
-                        text = "Transfer History",
+                        text = stringResource(R.string.history_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Last 20 offline app transfers",
+                        text = stringResource(R.string.history_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -121,7 +126,7 @@ fun HistoryScreen(
                         onClick = { showClearConfirm = true },
                         modifier = Modifier.testTag("clear_history_button")
                     ) {
-                        Text("Clear All")
+                        Text(stringResource(R.string.history_clear_all))
                     }
                 }
             }
@@ -138,17 +143,17 @@ fun HistoryScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.History,
-                            contentDescription = "Empty history",
+                            contentDescription = stringResource(R.string.history_empty_cd),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.size(64.dp)
                         )
                         Text(
-                            text = "No Transfers Yet",
+                            text = stringResource(R.string.history_empty_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Send or receive an app from the Home tab to see your history here.",
+                            text = stringResource(R.string.history_empty_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -164,6 +169,8 @@ fun HistoryScreen(
                     items(history, key = { it.id }) { item ->
                         HistoryItemCard(
                             item = item,
+                            isSharing = sharingItemId == item.id,
+                            onShare = { onShareItem(item) },
                             onDelete = { onDeleteItem(item.id) }
                         )
                     }
@@ -176,6 +183,8 @@ fun HistoryScreen(
 @Composable
 private fun HistoryItemCard(
     item: TransferHistoryEntity,
+    isSharing: Boolean,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     val isSent = item.direction == TransferDirection.SENT
@@ -184,6 +193,21 @@ private fun HistoryItemCard(
         TransferStatus.SUCCESS -> SuccessGreen
         TransferStatus.FAILED -> ErrorRed
         TransferStatus.CANCELLED -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val directionLabel = if (isSent) {
+        stringResource(R.string.direction_sent)
+    } else {
+        stringResource(R.string.direction_received)
+    }
+    val statusLabel = when (item.status) {
+        TransferStatus.SUCCESS -> stringResource(R.string.status_success)
+        TransferStatus.FAILED -> stringResource(R.string.status_failed)
+        TransferStatus.CANCELLED -> stringResource(R.string.status_cancelled)
+    }
+    val methodLabel = if (item.method == TransferMethod.NEARBY) {
+        stringResource(R.string.method_nearby)
+    } else {
+        stringResource(R.string.method_hotspot_http)
     }
 
     Card(
@@ -206,7 +230,7 @@ private fun HistoryItemCard(
             ) {
                 Icon(
                     imageVector = if (isSent) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward,
-                    contentDescription = item.direction.name,
+                    contentDescription = directionLabel,
                     tint = accent
                 )
             }
@@ -232,7 +256,7 @@ private fun HistoryItemCard(
                         color = statusColor.copy(alpha = 0.14f)
                     ) {
                         Text(
-                            text = item.status.name,
+                            text = statusLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = statusColor,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -240,14 +264,23 @@ private fun HistoryItemCard(
                     }
                 }
                 Text(
-                    text = "${if (isSent) "Sent to" else "From"} ${item.peerDeviceName} · ${if (item.method == TransferMethod.NEARBY) "Nearby" else "Hotspot HTTP"}",
+                    text = if (isSent) {
+                        stringResource(R.string.history_item_sent_to, item.peerDeviceName, methodLabel)
+                    } else {
+                        stringResource(R.string.history_item_received_from, item.peerDeviceName, methodLabel)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${FormatUtils.formatBytes(item.sizeBytes)} · v${item.versionName} · ${FormatUtils.formatDateTime(item.timestampMillis)}",
+                    text = stringResource(
+                        R.string.history_item_meta,
+                        FormatUtils.formatBytes(item.sizeBytes),
+                        item.versionName,
+                        FormatUtils.formatDateTime(item.timestampMillis)
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -259,13 +292,36 @@ private fun HistoryItemCard(
                     )
                 }
             }
+            if (item.status == TransferStatus.SUCCESS) {
+                IconButton(
+                    onClick = onShare,
+                    enabled = !isSharing,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("history_share_button_${item.id}")
+                ) {
+                    if (isSharing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = PrimaryBlue
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = stringResource(R.string.share_app_cd, item.appName),
+                            tint = PrimaryBlue
+                        )
+                    }
+                }
+            }
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier.minimumInteractiveComponentSize()
             ) {
                 Icon(
                     imageVector = Icons.Rounded.DeleteOutline,
-                    contentDescription = "Remove from history",
+                    contentDescription = stringResource(R.string.history_remove_item_cd),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.db.TransferHistoryEntity
+import com.example.model.TransferDirection
+import com.example.model.TransferStatus
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.PrimaryBlueDark
 import com.example.ui.theme.SuccessGreen
@@ -100,12 +102,12 @@ fun HomeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.WifiOff,
-                            contentDescription = "Offline mode",
+                            contentDescription = stringResource(R.string.home_offline_mode_cd),
                             tint = SuccessGreen,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "Offline Fast Transfer · $deviceName",
+                            text = stringResource(R.string.home_offline_header, deviceName),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -118,7 +120,7 @@ fun HomeScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("home_history_button")
                     ) {
-                        Icon(Icons.Rounded.History, contentDescription = "Transfer History")
+                        Icon(Icons.Rounded.History, contentDescription = stringResource(R.string.history_title))
                     }
                     IconButton(
                         onClick = onOpenSettings,
@@ -126,7 +128,7 @@ fun HomeScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("home_settings_button")
                     ) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                        Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.nav_settings))
                     }
                 }
             }
@@ -140,7 +142,7 @@ fun HomeScreen(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.img_transfer_hero),
-                    contentDescription = "Offline phone-to-phone app transfer",
+                    contentDescription = stringResource(R.string.home_hero_cd),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -167,7 +169,7 @@ fun HomeScreen(
                             color = Color.White.copy(alpha = 0.16f)
                         ) {
                             Text(
-                                text = "NO INTERNET · SPLIT APK READY",
+                                text = stringResource(R.string.home_hero_badge),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -175,7 +177,7 @@ fun HomeScreen(
                             )
                         }
                         Text(
-                            text = "Share any installed app\nbetween two phones",
+                            text = stringResource(R.string.home_hero_headline),
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White,
                             fontWeight = FontWeight.Bold
@@ -289,6 +291,15 @@ fun HomeScreen(
             // Recent Transfer Summary Strip
             if (recentTransfers.isNotEmpty()) {
                 val latest = recentTransfers.first()
+                val directionLabel = when (latest.direction) {
+                    TransferDirection.SENT -> stringResource(R.string.direction_sent)
+                    TransferDirection.RECEIVED -> stringResource(R.string.direction_received)
+                }
+                val statusLabel = when (latest.status) {
+                    TransferStatus.SUCCESS -> stringResource(R.string.status_success)
+                    TransferStatus.FAILED -> stringResource(R.string.status_failed)
+                    TransferStatus.CANCELLED -> stringResource(R.string.status_cancelled)
+                }
                 Card(
                     onClick = onOpenHistory,
                     shape = RoundedCornerShape(18.dp),
@@ -303,24 +314,32 @@ fun HomeScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Last Transfer · ${latest.direction.name}",
+                                text = stringResource(R.string.home_last_transfer_label, directionLabel),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "${latest.appName} (${FormatUtils.formatBytes(latest.sizeBytes)})",
+                                text = stringResource(
+                                    R.string.home_last_transfer_app,
+                                    latest.appName,
+                                    FormatUtils.formatBytes(latest.sizeBytes)
+                                ),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "${latest.status.name} · ${FormatUtils.formatDateTime(latest.timestampMillis)}",
+                                text = stringResource(
+                                    R.string.home_last_transfer_status,
+                                    statusLabel,
+                                    FormatUtils.formatDateTime(latest.timestampMillis)
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                            contentDescription = "View History"
+                            contentDescription = stringResource(R.string.home_view_history_cd)
                         )
                     }
                 }
@@ -338,12 +357,12 @@ fun HomeScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Info,
-                    contentDescription = "Limitations",
+                    contentDescription = stringResource(R.string.limitations_title),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = "Only APK files are transferred (not app data/logins). Tap Settings for details.",
+                    text = stringResource(R.string.home_limitations_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

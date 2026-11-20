@@ -3,6 +3,8 @@ package com.example.transfer
 import android.content.Context
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.annotation.StringRes
+import com.example.R
 import com.example.apk.ApkStorageManager
 import com.example.model.ApkBundleMetadata
 import com.example.model.ApkFileEntry
@@ -16,6 +18,7 @@ import com.example.service.NotificationHelper
 import com.example.service.TransferForegroundService
 import com.example.util.ConnectivityStatus
 import com.example.util.FormatUtils
+import com.example.util.LocaleHelper
 import com.example.util.PermissionHelper
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.nearby.Nearby
@@ -124,6 +127,11 @@ class NearbyTransferManager(
     private val context: Context,
     private val storageManager: ApkStorageManager
 ) {
+    private fun str(@StringRes id: Int, vararg args: Any): String {
+        val loc = LocaleHelper.localizedContext(context)
+        return if (args.isEmpty()) loc.getString(id) else loc.getString(id, *args)
+    }
+
     @Volatile
     private var clientInitialized = false
 
@@ -192,7 +200,7 @@ class NearbyTransferManager(
             Log.w(TAG, "Refusing startAdvertising: missing permissions $missingPerms")
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = "Required Nearby, Bluetooth, or Location permissions are missing. Please grant all permissions and retry.",
+                reason = str(R.string.error_nearby_missing_perms),
                 bundle = bundle
             )
             return
@@ -235,15 +243,15 @@ class NearbyTransferManager(
                 Log.i(TAG, "Nearby advertising started as '$advertisedName' for ${bundle.appName}")
                 TransferForegroundService.startOrUpdate(
                     context,
-                    "Sharing ${bundle.appName}",
-                    "Waiting for receiver nearby...",
+                    str(R.string.notification_sharing_title, bundle.appName),
+                    str(R.string.notification_waiting_receiver),
                     indeterminate = true
                 )
             }.addOnFailureListener { e ->
                 Log.e(TAG, "Nearby startAdvertising failed", e)
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = mapNearbyError(e, "Could not start Nearby sharing"),
+                    reason = mapNearbyError(e, str(R.string.error_nearby_start_sharing)),
                     bundle = bundle
                 )
             }
@@ -251,28 +259,28 @@ class NearbyTransferManager(
             Log.e(TAG, "SecurityException in startAdvertising", se)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(se, "Could not start Nearby sharing"),
+                reason = mapNearbyError(se, str(R.string.error_nearby_start_sharing)),
                 bundle = bundle
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException in startAdvertising", ise)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ise, "Could not start Nearby sharing"),
+                reason = mapNearbyError(ise, str(R.string.error_nearby_start_sharing)),
                 bundle = bundle
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException in startAdvertising", ae)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ae, "Could not start Nearby sharing"),
+                reason = mapNearbyError(ae, str(R.string.error_nearby_start_sharing)),
                 bundle = bundle
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Unexpected error in startAdvertising", e)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(e, "Could not start Nearby sharing"),
+                reason = mapNearbyError(e, str(R.string.error_nearby_start_sharing)),
                 bundle = bundle
             )
         }
@@ -290,7 +298,7 @@ class NearbyTransferManager(
                     Log.e(TAG, "Failed to accept connection", e)
                     TransferForegroundService.stop(context)
                     _senderState.value = NearbySenderState.Error(
-                        reason = mapNearbyError(e, "Failed to accept connection"),
+                        reason = mapNearbyError(e, str(R.string.error_nearby_accept_connection)),
                         bundle = bundle
                     )
                 }
@@ -298,28 +306,28 @@ class NearbyTransferManager(
             Log.e(TAG, "SecurityException in acceptIncomingConnection", se)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(se, "Failed to accept connection"),
+                reason = mapNearbyError(se, str(R.string.error_nearby_accept_connection)),
                 bundle = bundle
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException in acceptIncomingConnection", ise)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ise, "Failed to accept connection"),
+                reason = mapNearbyError(ise, str(R.string.error_nearby_accept_connection)),
                 bundle = bundle
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException in acceptIncomingConnection", ae)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ae, "Failed to accept connection"),
+                reason = mapNearbyError(ae, str(R.string.error_nearby_accept_connection)),
                 bundle = bundle
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Error in acceptIncomingConnection", e)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(e, "Failed to accept connection"),
+                reason = mapNearbyError(e, str(R.string.error_nearby_accept_connection)),
                 bundle = bundle
             )
         }
@@ -373,14 +381,14 @@ class NearbyTransferManager(
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
                     _senderState.value = NearbySenderState.Error(
-                        reason = "Connection was declined by $senderPeerName.",
+                        reason = str(R.string.error_nearby_connection_declined, senderPeerName),
                         bundle = bundle
                     )
                     TransferForegroundService.stop(context)
                 }
                 else -> {
                     _senderState.value = NearbySenderState.Error(
-                        reason = "Nearby connection failed (code ${result.status.statusCode}). Try again or use Wi-Fi Hotspot Mode.",
+                        reason = str(R.string.error_nearby_connection_failed, result.status.statusCode),
                         bundle = bundle
                     )
                     TransferForegroundService.stop(context)
@@ -394,7 +402,7 @@ class NearbyTransferManager(
             if (current is NearbySenderState.Sending || current is NearbySenderState.WaitingReceiverAccept) {
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = "Connection lost with $senderPeerName before transfer finished.",
+                    reason = str(R.string.error_nearby_connection_lost_sender, senderPeerName),
                     bundle = activeBundle
                 )
             }
@@ -423,7 +431,7 @@ class NearbyTransferManager(
                     Log.e(TAG, "Failed to send metadata", e)
                     TransferForegroundService.stop(context)
                     _senderState.value = NearbySenderState.Error(
-                        reason = mapNearbyError(e, "Failed to send app info"),
+                        reason = mapNearbyError(e, str(R.string.error_nearby_send_metadata)),
                         bundle = bundle
                     )
                 }
@@ -431,28 +439,28 @@ class NearbyTransferManager(
             Log.e(TAG, "SecurityException sending metadata", se)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(se, "Failed to send app info"),
+                reason = mapNearbyError(se, str(R.string.error_nearby_send_metadata)),
                 bundle = bundle
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException sending metadata", ise)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ise, "Failed to send app info"),
+                reason = mapNearbyError(ise, str(R.string.error_nearby_send_metadata)),
                 bundle = bundle
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException sending metadata", ae)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(ae, "Failed to send app info"),
+                reason = mapNearbyError(ae, str(R.string.error_nearby_send_metadata)),
                 bundle = bundle
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Error sending metadata", e)
             TransferForegroundService.stop(context)
             _senderState.value = NearbySenderState.Error(
-                reason = mapNearbyError(e, "Failed to send app info"),
+                reason = mapNearbyError(e, str(R.string.error_nearby_send_metadata)),
                 bundle = bundle
             )
         }
@@ -495,7 +503,7 @@ class NearbyTransferManager(
                             Log.e(TAG, "Failed to send file map payload", e)
                             TransferForegroundService.stop(context)
                             _senderState.value = NearbySenderState.Error(
-                                reason = mapNearbyError(e, "Failed to send file metadata"),
+                                reason = mapNearbyError(e, str(R.string.error_nearby_send_file_meta)),
                                 bundle = bundle
                             )
                         }
@@ -505,7 +513,7 @@ class NearbyTransferManager(
                             Log.e(TAG, "Failed to send APK file payload", e)
                             TransferForegroundService.stop(context)
                             _senderState.value = NearbySenderState.Error(
-                                reason = mapNearbyError(e, "Failed to send ${file.name}"),
+                                reason = mapNearbyError(e, str(R.string.error_nearby_send_file, file.name)),
                                 bundle = bundle
                             )
                         }
@@ -515,28 +523,28 @@ class NearbyTransferManager(
                 Log.e(TAG, "SecurityException queueing APK payloads", se)
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = mapNearbyError(se, "Failed while sending files"),
+                    reason = mapNearbyError(se, str(R.string.error_nearby_sending_files)),
                     bundle = bundle
                 )
             } catch (ise: IllegalStateException) {
                 Log.e(TAG, "IllegalStateException queueing APK payloads", ise)
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = mapNearbyError(ise, "Failed while sending files"),
+                    reason = mapNearbyError(ise, str(R.string.error_nearby_sending_files)),
                     bundle = bundle
                 )
             } catch (ae: ApiException) {
                 Log.e(TAG, "ApiException queueing APK payloads", ae)
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = mapNearbyError(ae, "Failed while sending files"),
+                    reason = mapNearbyError(ae, str(R.string.error_nearby_sending_files)),
                     bundle = bundle
                 )
             } catch (t: Throwable) {
                 Log.e(TAG, "Error queueing APK payloads", t)
                 TransferForegroundService.stop(context)
                 _senderState.value = NearbySenderState.Error(
-                    reason = mapNearbyError(t, "Failed while preparing files"),
+                    reason = mapNearbyError(t, str(R.string.error_nearby_preparing_files)),
                     bundle = bundle
                 )
             }
@@ -558,7 +566,7 @@ class NearbyTransferManager(
                     Log.i(TAG, "Receiver declined offer")
                     stopAll()
                     _senderState.value = NearbySenderState.Error(
-                        reason = "$senderPeerName declined the app transfer.",
+                        reason = str(R.string.error_nearby_receiver_declined_app, senderPeerName),
                         bundle = bundle
                     )
                 }
@@ -589,8 +597,12 @@ class NearbyTransferManager(
                         NotificationHelper.showResultNotification(
                             context,
                             NotificationHelper.NOTIFICATION_ID_RESULT,
-                            "Sent ${bundle.appName}",
-                            "Delivered ${FormatUtils.formatBytes(bundle.totalSizeBytes)} to $senderPeerName"
+                            str(R.string.notification_sent_title, bundle.appName),
+                            str(
+                                R.string.notification_sent_body,
+                                FormatUtils.formatBytes(bundle.totalSizeBytes),
+                                senderPeerName
+                            )
                         )
                         runCatching { connectionsClient.disconnectFromEndpoint(endpointId) }
                         _senderState.value = NearbySenderState.Success(
@@ -603,14 +615,14 @@ class NearbyTransferManager(
                 PayloadTransferUpdate.Status.FAILURE -> {
                     TransferForegroundService.stop(context)
                     _senderState.value = NearbySenderState.Error(
-                        reason = "Transfer interrupted while sending ${bundle.appName}. Check proximity and retry.",
+                        reason = str(R.string.error_nearby_interrupted_sending, bundle.appName),
                         bundle = bundle
                     )
                 }
                 PayloadTransferUpdate.Status.CANCELED -> {
                     TransferForegroundService.stop(context)
                     _senderState.value = NearbySenderState.Error(
-                        reason = "Transfer was cancelled.",
+                        reason = str(R.string.error_nearby_cancelled),
                         bundle = bundle
                     )
                 }
@@ -651,7 +663,7 @@ class NearbyTransferManager(
             lastNotificationUpdateMillis = now
             TransferForegroundService.startOrUpdate(
                 context = context,
-                title = "Sending ${bundle.appName} (${progress.progressPercent}%)",
+                title = str(R.string.notification_sending_progress, bundle.appName, progress.progressPercent),
                 text = "${FormatUtils.formatBytes(sentBytes)} / ${FormatUtils.formatBytes(bundle.totalSizeBytes)} • ${FormatUtils.formatSpeed(speed)}",
                 progressPercent = progress.progressPercent,
                 indeterminate = false
@@ -669,7 +681,7 @@ class NearbyTransferManager(
         if (missingPerms.isNotEmpty()) {
             Log.w(TAG, "Refusing startDiscovery: missing permissions $missingPerms")
             _receiverState.value = NearbyReceiverState.Error(
-                "Required Nearby, Bluetooth, or Location permissions are missing. Please grant all permissions and retry."
+                str(R.string.error_nearby_missing_perms)
             )
             return
         }
@@ -709,28 +721,28 @@ class NearbyTransferManager(
             }.addOnFailureListener { e ->
                 Log.e(TAG, "Nearby startDiscovery failed", e)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(e, "Could not scan for nearby senders")
+                    mapNearbyError(e, str(R.string.error_nearby_scan_failed))
                 )
             }
         } catch (se: SecurityException) {
             Log.e(TAG, "SecurityException in startDiscovery", se)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(se, "Could not scan for nearby senders")
+                mapNearbyError(se, str(R.string.error_nearby_scan_failed))
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException in startDiscovery", ise)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ise, "Could not scan for nearby senders")
+                mapNearbyError(ise, str(R.string.error_nearby_scan_failed))
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException in startDiscovery", ae)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ae, "Could not scan for nearby senders")
+                mapNearbyError(ae, str(R.string.error_nearby_scan_failed))
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Unexpected error in startDiscovery", e)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(e, "Could not scan for nearby senders")
+                mapNearbyError(e, str(R.string.error_nearby_scan_failed))
             )
         }
     }
@@ -750,28 +762,28 @@ class NearbyTransferManager(
             ).addOnFailureListener { e ->
                 Log.e(TAG, "requestConnection failed", e)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(e, "Could not connect to ${sender.deviceName}")
+                    mapNearbyError(e, str(R.string.error_nearby_connect_failed, sender.deviceName))
                 )
             }
         } catch (se: SecurityException) {
             Log.e(TAG, "SecurityException in requestConnection", se)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(se, "Could not connect to ${sender.deviceName}")
+                mapNearbyError(se, str(R.string.error_nearby_connect_failed, sender.deviceName))
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException in requestConnection", ise)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ise, "Could not connect to ${sender.deviceName}")
+                mapNearbyError(ise, str(R.string.error_nearby_connect_failed, sender.deviceName))
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException in requestConnection", ae)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ae, "Could not connect to ${sender.deviceName}")
+                mapNearbyError(ae, str(R.string.error_nearby_connect_failed, sender.deviceName))
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Error in requestConnection", e)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(e, "Could not connect to ${sender.deviceName}")
+                mapNearbyError(e, str(R.string.error_nearby_connect_failed, sender.deviceName))
             )
         }
     }
@@ -784,7 +796,7 @@ class NearbyTransferManager(
             storageManager.ensureSpaceOrThrow(metadata.totalSizeBytes)
         } catch (ioe: IOException) {
             declineIncomingOffer()
-            _receiverState.value = NearbyReceiverState.Error(ioe.message ?: "Storage is full.")
+            _receiverState.value = NearbyReceiverState.Error(ioe.message ?: str(R.string.error_storage_full))
             return
         }
 
@@ -807,8 +819,8 @@ class NearbyTransferManager(
 
         TransferForegroundService.startOrUpdate(
             context,
-            "Receiving ${metadata.appName}",
-            "Starting download from $receiverPeerName...",
+            str(R.string.notification_receiving_title, metadata.appName),
+            str(R.string.notification_starting_download, receiverPeerName),
             progressPercent = 0,
             indeterminate = false
         )
@@ -822,32 +834,32 @@ class NearbyTransferManager(
                 Log.e(TAG, "Failed to send ACCEPT", e)
                 TransferForegroundService.stop(context)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(e, "Lost connection while accepting transfer")
+                    mapNearbyError(e, str(R.string.error_nearby_accept_lost))
                 )
             }
         } catch (se: SecurityException) {
             Log.e(TAG, "SecurityException sending ACCEPT", se)
             TransferForegroundService.stop(context)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(se, "Could not accept transfer")
+                mapNearbyError(se, str(R.string.error_nearby_accept_failed))
             )
         } catch (ise: IllegalStateException) {
             Log.e(TAG, "IllegalStateException sending ACCEPT", ise)
             TransferForegroundService.stop(context)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ise, "Could not accept transfer")
+                mapNearbyError(ise, str(R.string.error_nearby_accept_failed))
             )
         } catch (ae: ApiException) {
             Log.e(TAG, "ApiException sending ACCEPT", ae)
             TransferForegroundService.stop(context)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(ae, "Could not accept transfer")
+                mapNearbyError(ae, str(R.string.error_nearby_accept_failed))
             )
         } catch (e: Throwable) {
             Log.e(TAG, "Error sending ACCEPT", e)
             TransferForegroundService.stop(context)
             _receiverState.value = NearbyReceiverState.Error(
-                mapNearbyError(e, "Lost connection while accepting transfer")
+                mapNearbyError(e, str(R.string.error_nearby_accept_lost))
             )
         }
     }
@@ -961,28 +973,28 @@ class NearbyTransferManager(
                     .addOnFailureListener { e ->
                         Log.e(TAG, "Receiver acceptConnection failed", e)
                         _receiverState.value = NearbyReceiverState.Error(
-                            mapNearbyError(e, "Failed to accept connection from ${info.endpointName}")
+                            mapNearbyError(e, str(R.string.error_nearby_accept_connection_from, info.endpointName))
                         )
                     }
             } catch (se: SecurityException) {
                 Log.e(TAG, "SecurityException in receiver acceptConnection", se)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(se, "Failed to accept connection from ${info.endpointName}")
+                    mapNearbyError(se, str(R.string.error_nearby_accept_connection_from, info.endpointName))
                 )
             } catch (ise: IllegalStateException) {
                 Log.e(TAG, "IllegalStateException in receiver acceptConnection", ise)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(ise, "Failed to accept connection from ${info.endpointName}")
+                    mapNearbyError(ise, str(R.string.error_nearby_accept_connection_from, info.endpointName))
                 )
             } catch (ae: ApiException) {
                 Log.e(TAG, "ApiException in receiver acceptConnection", ae)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(ae, "Failed to accept connection from ${info.endpointName}")
+                    mapNearbyError(ae, str(R.string.error_nearby_accept_connection_from, info.endpointName))
                 )
             } catch (e: Throwable) {
                 Log.e(TAG, "Error in receiver acceptConnection", e)
                 _receiverState.value = NearbyReceiverState.Error(
-                    mapNearbyError(e, "Failed to accept connection from ${info.endpointName}")
+                    mapNearbyError(e, str(R.string.error_nearby_accept_connection_from, info.endpointName))
                 )
             }
         }
@@ -996,15 +1008,15 @@ class NearbyTransferManager(
                     delay(20_000L)
                     if (pendingMetadata == null && _receiverState.value is NearbyReceiverState.WaitingSenderApproval) {
                         _receiverState.value = NearbyReceiverState.Error(
-                            "Sender did not respond in time. Try connecting again or use Wi-Fi Hotspot Mode."
+                            str(R.string.error_nearby_sender_timeout)
                         )
                     }
                 }
             } else {
                 val reason = if (result.status.statusCode == ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED) {
-                    "$receiverPeerName declined the connection."
+                    str(R.string.error_nearby_sender_declined, receiverPeerName)
                 } else {
-                    "Could not connect to $receiverPeerName (code ${result.status.statusCode})."
+                    str(R.string.error_nearby_connect_failed_code, receiverPeerName, result.status.statusCode)
                 }
                 _receiverState.value = NearbyReceiverState.Error(reason)
             }
@@ -1016,7 +1028,7 @@ class NearbyTransferManager(
             if (current is NearbyReceiverState.Downloading || current is NearbyReceiverState.IncomingOffer || current is NearbyReceiverState.WaitingSenderApproval) {
                 TransferForegroundService.stop(context)
                 _receiverState.value = NearbyReceiverState.Error(
-                    "Connection lost with $receiverPeerName. Tap Retry or try Wi-Fi Hotspot Mode."
+                    str(R.string.error_nearby_connection_lost_receiver, receiverPeerName)
                 )
             }
         }
@@ -1077,12 +1089,12 @@ class NearbyTransferManager(
                 PayloadTransferUpdate.Status.FAILURE -> {
                     TransferForegroundService.stop(context)
                     _receiverState.value = NearbyReceiverState.Error(
-                        "Download failed mid-transfer. Ensure phones stay close and retry."
+                        str(R.string.error_nearby_download_interrupted)
                     )
                 }
                 PayloadTransferUpdate.Status.CANCELED -> {
                     TransferForegroundService.stop(context)
-                    _receiverState.value = NearbyReceiverState.Error("Transfer was cancelled.")
+                    _receiverState.value = NearbyReceiverState.Error(str(R.string.error_nearby_cancelled))
                 }
             }
         }
@@ -1154,8 +1166,8 @@ class NearbyTransferManager(
                     NotificationHelper.showResultNotification(
                         context,
                         NotificationHelper.NOTIFICATION_ID_RESULT,
-                        "Downloaded ${metadata.appName}",
-                        "Saved to $displayPath. Tap to install."
+                        str(R.string.notification_downloaded_title, metadata.appName),
+                        str(R.string.notification_downloaded_body, displayPath)
                     )
                     val endpoint = receiverEndpointId
                     if (!endpoint.isNullOrBlank()) {
@@ -1173,7 +1185,7 @@ class NearbyTransferManager(
                 Log.e(TAG, "Error saving received APK file", t)
                 TransferForegroundService.stop(context)
                 _receiverState.value = NearbyReceiverState.Error(
-                    t.message ?: "Failed to save downloaded APK file."
+                    t.message ?: str(R.string.error_nearby_save_failed)
                 )
             }
         }
@@ -1213,7 +1225,11 @@ class NearbyTransferManager(
             lastNotificationUpdateMillis = now
             TransferForegroundService.startOrUpdate(
                 context = context,
-                title = "Downloading ${metadata.appName} (${progress.progressPercent}%)",
+                title = str(
+                    R.string.notification_downloading_progress,
+                    metadata.appName,
+                    progress.progressPercent
+                ),
                 text = "${FormatUtils.formatBytes(receivedBytes)} / ${FormatUtils.formatBytes(metadata.totalSizeBytes)} • ${FormatUtils.formatSpeed(speed)}",
                 progressPercent = progress.progressPercent,
                 indeterminate = false
@@ -1239,20 +1255,20 @@ class NearbyTransferManager(
     private fun buildConnectivityError(status: ConnectivityStatus): String {
         return when {
             !status.isBluetoothEnabled && !status.isWifiEnabled ->
-                "Turn on both Bluetooth and Wi-Fi to use Nearby offline transfer, or try Wi-Fi Hotspot Mode."
+                str(R.string.error_nearby_bt_and_wifi_off)
             !status.isBluetoothEnabled ->
-                "Bluetooth is turned off. Turn on Bluetooth to discover nearby phones, or try Wi-Fi Hotspot Mode."
+                str(R.string.error_nearby_bt_off)
             else ->
-                "Wi-Fi is turned off. Turn on Wi-Fi for high-speed offline transfer, or try Wi-Fi Hotspot Mode."
+                str(R.string.error_nearby_wifi_off)
         }
     }
 
     private fun mapNearbyError(e: Throwable, prefix: String): String {
         if (e is SecurityException) {
-            return "$prefix: Required Bluetooth, Nearby Wi-Fi, or Location permissions were not granted."
+            return str(R.string.error_nearby_map_security, prefix)
         }
         if (e is IllegalStateException) {
-            return "$prefix: Nearby service was not ready. Please retry or use Wi-Fi Hotspot Mode."
+            return str(R.string.error_nearby_map_illegal_state, prefix)
         }
         val msg = e.message.orEmpty()
         val statusCode = (e as? ApiException)?.statusCode
@@ -1260,16 +1276,20 @@ class NearbyTransferManager(
             statusCode == ConnectionsStatusCodes.STATUS_BLUETOOTH_ERROR ||
                 msg.contains("8007", ignoreCase = true) ||
                 msg.contains("BLUETOOTH", ignoreCase = true) ->
-                "$prefix: Turn on Bluetooth and Wi-Fi on both phones, or use Wi-Fi Hotspot Mode."
+                str(R.string.error_nearby_map_bluetooth, prefix)
             statusCode == 8034 ||
                 msg.contains("8034", ignoreCase = true) ||
                 msg.contains("MISSING_PERMISSION", ignoreCase = true) ->
-                "$prefix: Required Nearby/Bluetooth/Location permissions were not granted."
+                str(R.string.error_nearby_map_security, prefix)
             statusCode == 16 ||
                 statusCode == ConnectionsStatusCodes.API_NOT_CONNECTED ||
                 msg.contains("API_UNAVAILABLE", ignoreCase = true) ->
-                "$prefix: Google Play Services Nearby is unavailable on this device. Use Wi-Fi Hotspot Mode."
-            else -> "$prefix: ${msg.ifBlank { "Check Bluetooth & Wi-Fi and try again." }}"
+                str(R.string.error_nearby_map_unavailable, prefix)
+            else -> str(
+                R.string.error_nearby_map_generic,
+                prefix,
+                msg.ifBlank { str(R.string.error_nearby_map_fallback_hint) }
+            )
         }
     }
 

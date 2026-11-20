@@ -3,9 +3,11 @@ package com.example.apk
 import android.content.Context
 import android.os.StatFs
 import android.util.Log
+import com.example.R
 import com.example.model.ExtractedApkBundle
 import com.example.model.InstalledAppInfo
 import com.example.util.FormatUtils
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -17,9 +19,10 @@ class ApkExtractor(private val context: Context) {
     suspend fun extractBundle(app: InstalledAppInfo): Result<ExtractedApkBundle> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val loc = LocaleHelper.localizedContext(context)
                 val baseSource = File(app.baseApkPath)
                 if (!baseSource.exists() || !baseSource.canRead()) {
-                    throw IOException("Cannot read APK file for ${app.appName}. The app may be protected or removed.")
+                    throw IOException(loc.getString(R.string.error_cannot_read_apk, app.appName))
                 }
 
                 val outgoingRoot = File(context.cacheDir, "outgoing_apks").apply { mkdirs() }
@@ -32,7 +35,11 @@ class ApkExtractor(private val context: Context) {
                 val statFs = StatFs(outgoingRoot.absolutePath)
                 if (statFs.availableBytes < requiredBytes) {
                     throw IOException(
-                        "Not enough storage space to prepare ${app.appName}. Need ${FormatUtils.formatBytes(requiredBytes)} free."
+                        loc.getString(
+                            R.string.error_not_enough_storage_prepare,
+                            app.appName,
+                            FormatUtils.formatBytes(requiredBytes)
+                        )
                     )
                 }
 
@@ -66,7 +73,7 @@ class ApkExtractor(private val context: Context) {
                     app.splitApkPaths.forEachIndexed { idx, splitPath ->
                         val splitSrc = File(splitPath)
                         if (!splitSrc.exists() || !splitSrc.canRead()) {
-                            throw IOException("Missing split APK part: ${splitSrc.name}")
+                            throw IOException(loc.getString(R.string.error_missing_split_part, splitSrc.name))
                         }
                         var fileName = splitSrc.name
                         if (!fileName.endsWith(".apk", ignoreCase = true)) {

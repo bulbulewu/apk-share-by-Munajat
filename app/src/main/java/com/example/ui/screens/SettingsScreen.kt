@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -32,8 +34,10 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,9 +45,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
@@ -52,6 +58,7 @@ import com.example.data.prefs.UserSettings
 import com.example.ui.theme.ThemePreference
 import com.example.ui.theme.WarningAmber
 import com.example.util.BiometricHelper
+import com.example.util.LocaleHelper
 
 @Composable
 fun SettingsScreen(
@@ -61,6 +68,7 @@ fun SettingsScreen(
     onToggleBiometric: (Boolean) -> Unit,
     onTogglePublicDownloads: (Boolean) -> Unit,
     onTogglePowerSaver: (Boolean) -> Unit,
+    onUpdateLanguage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -80,7 +88,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Settings & About",
+                text = stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -97,10 +105,14 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.PhoneAndroid, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Device Name", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = stringResource(R.string.settings_device_name_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Text(
-                        text = "Shown to nearby phones when sending or receiving apps.",
+                        text = stringResource(R.string.settings_device_name_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -121,11 +133,80 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 onUpdateDeviceName(nameDraft)
-                                Toast.makeText(context, "Device name saved", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.settings_device_name_saved_toast),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             },
                             modifier = Modifier.testTag("save_device_name_button")
                         ) {
-                            Text("Save")
+                            Text(stringResource(R.string.action_save))
+                        }
+                    }
+                }
+            }
+
+            // Language Card
+            val languageOptions = listOf(
+                LocaleHelper.LANGUAGE_SYSTEM to stringResource(R.string.settings_language_system),
+                LocaleHelper.LANGUAGE_ENGLISH to stringResource(R.string.settings_language_english),
+                LocaleHelper.LANGUAGE_BANGLA to stringResource(R.string.settings_language_bangla)
+            )
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.testTag("language_settings_card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.Language,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings_language_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_language_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    languageOptions.forEach { (code, label) ->
+                        val selected = settings.language == code
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .selectable(
+                                    selected = selected,
+                                    role = Role.RadioButton,
+                                    onClick = { onUpdateLanguage(code) }
+                                )
+                                .minimumInteractiveComponentSize()
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                .testTag("language_option_$code"),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            )
                         }
                     }
                 }
@@ -158,12 +239,12 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Dark Mode",
+                                    text = stringResource(R.string.settings_dark_mode_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Switch between light and dark Material 3 color schemes",
+                                    text = stringResource(R.string.settings_dark_mode_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -193,9 +274,9 @@ fun SettingsScreen(
                                 label = {
                                     Text(
                                         when (pref) {
-                                            ThemePreference.SYSTEM -> "System"
-                                            ThemePreference.LIGHT -> "Light"
-                                            ThemePreference.DARK -> "Dark"
+                                            ThemePreference.SYSTEM -> stringResource(R.string.settings_theme_system)
+                                            ThemePreference.LIGHT -> stringResource(R.string.settings_theme_light)
+                                            ThemePreference.DARK -> stringResource(R.string.settings_theme_dark)
                                         }
                                     )
                                 },
@@ -228,12 +309,12 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Save to Download/APK Share",
+                                    text = stringResource(R.string.settings_downloads_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Keep received APKs accessible in your Files app",
+                                    text = stringResource(R.string.settings_downloads_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -259,12 +340,12 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Power Saver",
+                                    text = stringResource(R.string.settings_power_saver_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Reduces background transfer update frequency and disables heavy animations during long transfers",
+                                    text = stringResource(R.string.settings_power_saver_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -290,15 +371,15 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Biometric App Lock",
+                                    text = stringResource(R.string.settings_biometric_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = if (biometricSupported) {
-                                        "Require fingerprint, face, or PIN when opening APK Share"
+                                        stringResource(R.string.settings_biometric_desc_supported)
                                     } else {
-                                        "Set up a screen lock or fingerprint in Android Settings first"
+                                        stringResource(R.string.settings_biometric_desc_unsupported)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -325,7 +406,11 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.WarningAmber, contentDescription = "Limitations", tint = WarningAmber)
+                        Icon(
+                            Icons.Rounded.WarningAmber,
+                            contentDescription = stringResource(R.string.limitations_title),
+                            tint = WarningAmber
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.limitations_title),
@@ -353,18 +438,18 @@ fun SettingsScreen(
                         Icon(Icons.Rounded.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "About APK Share",
+                            text = stringResource(R.string.settings_about_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Text(
-                        text = "Version ${BuildConfig.VERSION_NAME} · 100% Offline · No internet, no server, no login, no ads.",
+                        text = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Primary engine: Google Nearby Connections (P2P_STAR). Fallback: Local Wi-Fi Hotspot HTTP Server + QR Code.",
+                        text = stringResource(R.string.settings_about_engine),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

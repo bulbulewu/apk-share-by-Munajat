@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.util.LocaleHelper
 
 object NotificationHelper {
 
@@ -25,21 +26,22 @@ object NotificationHelper {
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val loc = LocaleHelper.localizedContext(context)
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             val progressChannel = NotificationChannel(
                 CHANNEL_PROGRESS,
-                context.getString(R.string.notification_channel_name),
+                loc.getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = context.getString(R.string.notification_channel_desc)
+                description = loc.getString(R.string.notification_channel_desc)
                 setShowBadge(false)
             }
             val alertsChannel = NotificationChannel(
                 CHANNEL_ALERTS,
-                "Transfer & Install Alerts",
+                loc.getString(R.string.notification_alerts_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Alerts when an APK transfer or installation completes or fails"
+                description = loc.getString(R.string.notification_alerts_channel_desc)
             }
             manager.createNotificationChannel(progressChannel)
             manager.createNotificationChannel(alertsChannel)
@@ -71,6 +73,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val loc = LocaleHelper.localizedContext(context)
         return NotificationCompat.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)
@@ -79,7 +82,11 @@ object NotificationHelper {
             .setOnlyAlertOnce(true)
             .setProgress(100, progressPercent.coerceIn(0, 100), indeterminate)
             .setContentIntent(openAppIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelIntent)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                loc.getString(R.string.action_cancel),
+                cancelIntent
+            )
             .build()
     }
 

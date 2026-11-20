@@ -2,6 +2,8 @@ package com.example.transfer
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.StringRes
+import com.example.R
 import com.example.apk.ApkStorageManager
 import com.example.model.ApkBundleMetadata
 import com.example.model.ApkFileEntry
@@ -9,6 +11,7 @@ import com.example.model.TransferProgressState
 import com.example.service.NotificationHelper
 import com.example.service.TransferForegroundService
 import com.example.util.FormatUtils
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +56,11 @@ class HttpApkDownloader(
     private val context: Context,
     private val storageManager: ApkStorageManager
 ) {
+    private fun str(@StringRes id: Int, vararg args: Any): String {
+        val loc = LocaleHelper.localizedContext(context)
+        return if (args.isEmpty()) loc.getString(id) else loc.getString(id, *args)
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
     private val client = OkHttpClient.Builder()
@@ -73,7 +81,7 @@ class HttpApkDownloader(
         if (normalized == null) {
             _state.value = HttpDownloadState.Error(
                 rawInputUrl,
-                "Invalid URL. Example: http://192.168.43.1:8080/app.apk"
+                str(R.string.error_http_invalid_url)
             )
             return
         }
@@ -126,8 +134,8 @@ class HttpApkDownloader(
 
                 TransferForegroundService.startOrUpdate(
                     context,
-                    "Downloading ${metadata.appName}",
-                    "Connecting via Wi-Fi Hotspot...",
+                    str(R.string.notification_downloading_title, metadata.appName),
+                    str(R.string.notification_connecting_hotspot),
                     progressPercent = 0,
                     indeterminate = false
                 )
@@ -212,7 +220,11 @@ class HttpApkDownloader(
                                         lastNotifMs = now
                                         TransferForegroundService.startOrUpdate(
                                             context,
-                                            "Downloading ${metadata.appName} (${progress.progressPercent}%)",
+                                            str(
+                                                R.string.notification_downloading_progress,
+                                                metadata.appName,
+                                                progress.progressPercent
+                                            ),
                                             "${FormatUtils.formatBytes(totalTransferred)} / ${FormatUtils.formatBytes(overallTotal)} • ${FormatUtils.formatSpeed(speed)}",
                                             progressPercent = progress.progressPercent,
                                             indeterminate = false
@@ -243,8 +255,8 @@ class HttpApkDownloader(
                 NotificationHelper.showResultNotification(
                     context,
                     NotificationHelper.NOTIFICATION_ID_RESULT,
-                    "Downloaded ${metadata.appName}",
-                    "Saved to $displayPath. Tap to install."
+                    str(R.string.notification_downloaded_title, metadata.appName),
+                    str(R.string.notification_downloaded_body, displayPath)
                 )
                 _state.value = HttpDownloadState.Completed(
                     url = normalized,
@@ -263,8 +275,8 @@ class HttpApkDownloader(
                 val friendly = when {
                     t.message?.contains("Failed to connect", ignoreCase = true) == true ||
                         t.message?.contains("timed out", ignoreCase = true) == true ->
-                        "Cannot reach sender at $normalized. Make sure Phone B is connected to Phone A's Wi-Fi Hotspot."
-                    else -> t.message ?: "Download failed. Tap Retry to resume."
+                        str(R.string.error_http_cannot_reach, normalized)
+                    else -> t.message ?: str(R.string.error_http_download_failed)
                 }
                 _state.value = HttpDownloadState.Error(normalized, friendly)
             }

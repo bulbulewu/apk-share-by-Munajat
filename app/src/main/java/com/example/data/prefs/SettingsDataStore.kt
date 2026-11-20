@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.ui.theme.ThemePreference
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -21,7 +22,8 @@ data class UserSettings(
     val themePreference: ThemePreference = ThemePreference.SYSTEM,
     val biometricLockEnabled: Boolean = false,
     val exportToPublicDownloads: Boolean = true,
-    val powerSaverEnabled: Boolean = false
+    val powerSaverEnabled: Boolean = false,
+    val language: String = LocaleHelper.LANGUAGE_SYSTEM
 )
 
 fun defaultDeviceLabel(): String {
@@ -43,18 +45,23 @@ class SettingsDataStore(private val context: Context) {
         val BIOMETRIC_LOCK = booleanPreferencesKey("biometric_lock")
         val PUBLIC_DOWNLOADS = booleanPreferencesKey("public_downloads")
         val POWER_SAVER = booleanPreferencesKey("power_saver")
+        val LANGUAGE = stringPreferencesKey("language")
     }
+
+    fun getCachedLanguage(): String = LocaleHelper.getSavedLanguageSync(context)
 
     val settings: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
         val rawTheme = prefs[Keys.THEME_MODE] ?: ThemePreference.SYSTEM.name
         val theme = runCatching { ThemePreference.valueOf(rawTheme) }
             .getOrDefault(ThemePreference.SYSTEM)
+        val language = LocaleHelper.normalizeLanguageCode(prefs[Keys.LANGUAGE])
         UserSettings(
             deviceName = prefs[Keys.DEVICE_NAME]?.takeIf { it.isNotBlank() } ?: defaultDeviceLabel(),
             themePreference = theme,
             biometricLockEnabled = prefs[Keys.BIOMETRIC_LOCK] ?: false,
             exportToPublicDownloads = prefs[Keys.PUBLIC_DOWNLOADS] ?: true,
-            powerSaverEnabled = prefs[Keys.POWER_SAVER] ?: false
+            powerSaverEnabled = prefs[Keys.POWER_SAVER] ?: false,
+            language = language
         )
     }
 
@@ -85,6 +92,14 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setPowerSaverEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.POWER_SAVER] = enabled
+        }
+    }
+
+    suspend fun updateLanguage(languageCode: String) {
+        val normalized = LocaleHelper.normalizeLanguageCode(languageCode)
+        LocaleHelper.saveLanguageSync(context, normalized)
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.LANGUAGE] = normalized
         }
     }
 }

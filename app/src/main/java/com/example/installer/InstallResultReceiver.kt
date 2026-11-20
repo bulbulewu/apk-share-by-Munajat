@@ -6,7 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import android.util.Log
+import com.example.R
 import com.example.service.NotificationHelper
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +38,8 @@ class InstallResultReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
-        val appName = intent.getStringExtra(EXTRA_APP_NAME) ?: "App"
+        val loc = LocaleHelper.localizedContext(context)
+        val appName = intent.getStringExtra(EXTRA_APP_NAME) ?: loc.getString(R.string.sender_detail_app)
         val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999)
         val rawMsg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
@@ -61,13 +64,16 @@ class InstallResultReceiver : BroadcastReceiver() {
                         InstallResultBus.update(
                             InstallState.Failed(
                                 appName,
-                                "Could not open Android installer prompt: ${err.message}"
+                                loc.getString(
+                                    R.string.installer_error_open_prompt,
+                                    err.message ?: loc.getString(R.string.installer_unknown_error)
+                                )
                             )
                         )
                     }
                 } else {
                     InstallResultBus.update(
-                        InstallState.Failed(appName, "Android installer prompt was missing.")
+                        InstallState.Failed(appName, loc.getString(R.string.installer_error_prompt_missing))
                     )
                 }
             }
@@ -77,55 +83,59 @@ class InstallResultReceiver : BroadcastReceiver() {
                 NotificationHelper.showResultNotification(
                     context = context,
                     notificationId = NotificationHelper.NOTIFICATION_ID_INSTALL,
-                    title = "Installed $appName",
-                    message = "Tap to return to APK Share and open the app."
+                    title = loc.getString(R.string.notification_installed_title, appName),
+                    message = loc.getString(R.string.notification_installed_body)
                 )
             }
 
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
-                val reason = "Installation was cancelled by user."
+                val reason = loc.getString(R.string.installer_error_cancelled)
                 InstallResultBus.update(InstallState.Failed(appName, reason))
             }
 
             PackageInstaller.STATUS_FAILURE_BLOCKED -> {
-                val reason = "Install blocked by device security or Play Protect. $rawMsg".trim()
+                val reason = loc.getString(R.string.installer_error_blocked, rawMsg).trim()
                 InstallResultBus.update(InstallState.Failed(appName, reason))
                 NotificationHelper.showResultNotification(
                     context,
                     NotificationHelper.NOTIFICATION_ID_INSTALL,
-                    "Install Blocked: $appName",
+                    loc.getString(R.string.notification_install_blocked_title, appName),
                     reason,
                     isError = true
                 )
             }
 
             PackageInstaller.STATUS_FAILURE_CONFLICT -> {
-                val reason = "App conflicts with an existing installed version (different signature). Uninstall the old version first and try again."
+                val reason = loc.getString(R.string.installer_error_conflict)
                 InstallResultBus.update(InstallState.Failed(appName, reason))
             }
 
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> {
-                val reason = "This APK is not compatible with this phone's CPU or Android version."
+                val reason = loc.getString(R.string.installer_error_incompatible)
                 InstallResultBus.update(InstallState.Failed(appName, reason))
             }
 
             PackageInstaller.STATUS_FAILURE_INVALID -> {
-                val reason = "Invalid or corrupted APK file. Try transferring again."
+                val reason = loc.getString(R.string.installer_error_invalid)
                 InstallResultBus.update(InstallState.Failed(appName, reason))
             }
 
             PackageInstaller.STATUS_FAILURE_STORAGE -> {
-                val reason = "Not enough free storage on this phone to install $appName."
+                val reason = loc.getString(R.string.installer_error_storage, appName)
                 InstallResultBus.update(InstallState.Failed(appName, reason))
             }
 
             else -> {
-                val reason = if (rawMsg.isNotBlank()) "Install failed: $rawMsg" else "Install failed (code $status)."
+                val reason = if (rawMsg.isNotBlank()) {
+                    loc.getString(R.string.installer_error_failed_msg, rawMsg)
+                } else {
+                    loc.getString(R.string.installer_error_failed_code, status)
+                }
                 InstallResultBus.update(InstallState.Failed(appName, reason))
                 NotificationHelper.showResultNotification(
                     context,
                     NotificationHelper.NOTIFICATION_ID_INSTALL,
-                    "Install Failed: $appName",
+                    loc.getString(R.string.notification_install_failed_title, appName),
                     reason,
                     isError = true
                 )

@@ -68,12 +68,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.installer.InstallState
 import com.example.model.ApkBundleMetadata
 import com.example.transfer.HttpDownloadState
@@ -202,7 +204,11 @@ fun ReceiverScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (mode == ReceiverMode.HOTSPOT_HTTP) "Receive via Hotspot" else "Receive App",
+                        text = if (mode == ReceiverMode.HOTSPOT_HTTP) {
+                            stringResource(R.string.receiver_title_hotspot)
+                        } else {
+                            stringResource(R.string.receiver_title_nearby)
+                        },
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -213,7 +219,10 @@ fun ReceiverScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("receiver_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
@@ -250,7 +259,11 @@ fun ReceiverScreen(
                         },
                         onOpenInstalled = { pkg ->
                             if (!viewModel.openInstalledApp(pkg)) {
-                                Toast.makeText(context, "App has no launcher activity", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.receiver_no_launcher_toast),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         },
                         onDone = handleBack
@@ -269,7 +282,7 @@ fun ReceiverScreen(
                     ) {
                         Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Use Wi-Fi Hotspot QR / URL Instead")
+                        Text(stringResource(R.string.receiver_use_hotspot_instead))
                     }
                 } else if (!connectivity.isReadyForNearby) {
                     ConnectivityRequiredCard(
@@ -291,13 +304,13 @@ fun ReceiverScreen(
                     ) {
                         Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Use Wi-Fi Hotspot QR / URL Instead")
+                        Text(stringResource(R.string.receiver_use_hotspot_instead))
                     }
                 } else {
                     when (val state = nearbyState) {
                         is NearbyReceiverState.Idle -> {
                             CircularProgressIndicator()
-                            Text("Initializing receiver...")
+                            Text(stringResource(R.string.receiver_initializing))
                         }
 
                         is NearbyReceiverState.Discovering -> {
@@ -314,7 +327,7 @@ fun ReceiverScreen(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        "Camera permission is needed to scan the sender's QR code",
+                                        context.getString(R.string.receiver_camera_perm_nearby_toast),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -328,7 +341,7 @@ fun ReceiverScreen(
                                         if (!handled) {
                                             Toast.makeText(
                                                 context,
-                                                "Not a valid APK Share QR code",
+                                                context.getString(R.string.receiver_invalid_qr_toast),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -340,7 +353,7 @@ fun ReceiverScreen(
                                         .fillMaxWidth()
                                         .testTag("close_nearby_qr_scanner_button")
                                 ) {
-                                    Text("Cancel QR Scan")
+                                    Text(stringResource(R.string.receiver_cancel_qr_scan))
                                 }
                             } else {
                                 PulseRadarAnimation(
@@ -348,7 +361,7 @@ fun ReceiverScreen(
                                     centerIcon = {
                                         Icon(
                                             imageVector = Icons.Rounded.Radar,
-                                            contentDescription = "Scanning",
+                                            contentDescription = stringResource(R.string.receiver_scanning_cd),
                                             tint = Color.White,
                                             modifier = Modifier.size(32.dp)
                                         )
@@ -357,13 +370,13 @@ fun ReceiverScreen(
                             }
 
                             Text(
-                                text = "Scanning for nearby Senders...",
+                                text = stringResource(R.string.receiver_scanning_title),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Tap a device below once it appears, or scan Phone A's QR code to connect automatically.",
+                                text = stringResource(R.string.receiver_scanning_subtitle),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -391,14 +404,14 @@ fun ReceiverScreen(
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(
-                                                text = "Finding ${state.qrTargetLabel}...",
+                                                text = stringResource(R.string.receiver_finding_device, state.qrTargetLabel),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = SuccessGreen
                                             )
                                         }
                                         TextButton(onClick = { viewModel.clearQrPairTarget() }) {
-                                            Text("Clear")
+                                            Text(stringResource(R.string.action_clear))
                                         }
                                     }
                                 }
@@ -422,7 +435,7 @@ fun ReceiverScreen(
                                 ) {
                                     Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Scan QR to Find Device", fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.receiver_scan_qr_find_device), fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -433,7 +446,7 @@ fun ReceiverScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "No sender phones found yet. Make sure Phone A has selected an app and is on the Waiting screen.",
+                                        text = stringResource(R.string.receiver_no_senders_found),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center,
@@ -481,7 +494,7 @@ fun ReceiverScreen(
                                                         fontWeight = FontWeight.Bold
                                                     )
                                                     Text(
-                                                        text = "Tap to connect and receive app",
+                                                        text = stringResource(R.string.receiver_tap_to_connect),
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
@@ -502,7 +515,7 @@ fun ReceiverScreen(
                             ) {
                                 Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Try Wi-Fi Hotspot Mode (QR / URL)")
+                                Text(stringResource(R.string.receiver_try_hotspot_qr_url))
                             }
                         }
 
@@ -510,25 +523,29 @@ fun ReceiverScreen(
                             Spacer(modifier = Modifier.height(24.dp))
                             CircularProgressIndicator(color = SuccessGreen)
                             Text(
-                                text = "Waiting for sender approval...",
+                                text = stringResource(R.string.receiver_waiting_approval_title),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Ask \"${state.peerName}\" to tap Accept on their screen (Pairing code: ${state.authDigits})",
+                                text = stringResource(
+                                    R.string.receiver_waiting_approval_body,
+                                    state.peerName,
+                                    state.authDigits
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                             TextButton(onClick = handleBack) {
-                                Text("Cancel", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
                             }
                         }
 
                         is NearbyReceiverState.IncomingOffer -> {
                             AlertDialog(
                                 onDismissRequest = { viewModel.declineIncomingOffer() },
-                                title = { Text("Incoming App Transfer") },
+                                title = { Text(stringResource(R.string.receiver_incoming_offer_title)) },
                                 text = {
                                     Column(
                                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -545,7 +562,11 @@ fun ReceiverScreen(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "v${state.metadata.versionName} · ${FormatUtils.formatBytes(state.metadata.totalSizeBytes)}",
+                                            text = stringResource(
+                                                R.string.sender_bundle_meta,
+                                                state.metadata.versionName,
+                                                FormatUtils.formatBytes(state.metadata.totalSizeBytes)
+                                            ),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -555,7 +576,10 @@ fun ReceiverScreen(
                                                 color = PrimaryBlue.copy(alpha = 0.14f)
                                             ) {
                                                 Text(
-                                                    text = "Split APK Bundle (${state.metadata.files.size} files)",
+                                                    text = stringResource(
+                                                        R.string.label_split_apk_bundle,
+                                                        state.metadata.files.size
+                                                    ),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = PrimaryBlue,
                                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -563,7 +587,7 @@ fun ReceiverScreen(
                                             }
                                         }
                                         Text(
-                                            text = "From: ${state.peerName}",
+                                            text = stringResource(R.string.receiver_from_peer, state.peerName),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -577,7 +601,7 @@ fun ReceiverScreen(
                                         ),
                                         modifier = Modifier.testTag("accept_incoming_apk_button")
                                     ) {
-                                        Text("Accept")
+                                        Text(stringResource(R.string.action_accept))
                                     }
                                 },
                                 dismissButton = {
@@ -585,7 +609,7 @@ fun ReceiverScreen(
                                         onClick = { viewModel.declineIncomingOffer() },
                                         modifier = Modifier.testTag("decline_incoming_apk_button")
                                     ) {
-                                        Text("Decline")
+                                        Text(stringResource(R.string.action_decline))
                                     }
                                 }
                             )
@@ -595,9 +619,9 @@ fun ReceiverScreen(
                             CircularTransferProgress(
                                 progress = state.progress,
                                 accentColor = SuccessGreen,
-                                title = "Receiving ${state.metadata.appName}",
-                                subtitle = "From ${state.peerName}",
-                                directionLabel = "Received"
+                                title = stringResource(R.string.receiver_receiving_app, state.metadata.appName),
+                                subtitle = stringResource(R.string.receiver_from_peer_short, state.peerName),
+                                directionLabel = stringResource(R.string.progress_direction_received)
                             )
                             OutlinedButton(
                                 onClick = handleBack,
@@ -606,7 +630,7 @@ fun ReceiverScreen(
                                     .height(48.dp)
                                     .testTag("cancel_downloading_button")
                             ) {
-                                Text("Cancel", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
                             }
                         }
 
@@ -629,7 +653,11 @@ fun ReceiverScreen(
                                 },
                                 onOpenAppClick = {
                                     if (!viewModel.openInstalledApp(state.metadata.packageName)) {
-                                        Toast.makeText(context, "App has no launcher icon", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.receiver_no_launcher_icon_toast),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 },
                                 onDone = handleBack
@@ -640,12 +668,12 @@ fun ReceiverScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             Icon(
                                 imageVector = Icons.Rounded.ErrorOutline,
-                                contentDescription = "Error",
+                                contentDescription = stringResource(R.string.cd_error),
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(64.dp)
                             )
                             Text(
-                                text = "Transfer Interrupted",
+                                text = stringResource(R.string.receiver_transfer_interrupted_title),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -682,7 +710,7 @@ fun ReceiverScreen(
                             ) {
                                 Icon(Icons.Rounded.Refresh, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Retry Nearby")
+                                Text(stringResource(R.string.sender_retry_nearby))
                             }
                             OutlinedButton(
                                 onClick = { viewModel.switchToHotspotMode() },
@@ -692,7 +720,7 @@ fun ReceiverScreen(
                             ) {
                                 Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Try Wi-Fi Hotspot Mode")
+                                Text(stringResource(R.string.sender_try_hotspot_mode))
                             }
                         }
                     }
@@ -729,7 +757,11 @@ private fun HotspotReceiverContent(
         if (granted) {
             showScanner = true
         } else {
-            Toast.makeText(context, "Camera permission is needed to scan QR codes", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                context.getString(R.string.receiver_camera_perm_qr_toast),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -745,12 +777,12 @@ private fun HotspotReceiverContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Connect to Phone A's Wi-Fi Hotspot",
+                        text = stringResource(R.string.receiver_hotspot_connect_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "1. Join Phone A's hotspot in Wi-Fi settings.\n2. Scan Phone A's QR code or enter the URL below.",
+                        text = stringResource(R.string.receiver_hotspot_connect_steps),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -766,7 +798,7 @@ private fun HotspotReceiverContent(
                     }
                 )
                 TextButton(onClick = { showScanner = false }) {
-                    Text("Hide Scanner")
+                    Text(stringResource(R.string.receiver_hide_scanner))
                 }
             } else {
                 Button(
@@ -785,14 +817,14 @@ private fun HotspotReceiverContent(
                 ) {
                     Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Scan Sender QR Code", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.receiver_scan_sender_qr), fontWeight = FontWeight.Bold)
                 }
             }
 
             OutlinedTextField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
-                label = { Text("Sender URL") },
+                label = { Text(stringResource(R.string.receiver_sender_url_label)) },
                 placeholder = { Text("http://192.168.43.1:8080/app.apk") },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
@@ -810,20 +842,20 @@ private fun HotspotReceiverContent(
             ) {
                 Icon(Icons.Rounded.Download, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Download APK", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.receiver_download_apk_button), fontWeight = FontWeight.Bold)
             }
 
             TextButton(onClick = onSwitchToNearby) {
-                Text("Switch back to Nearby Discovery")
+                Text(stringResource(R.string.receiver_switch_to_nearby))
             }
         }
 
         is HttpDownloadState.Connecting -> {
             Spacer(modifier = Modifier.height(24.dp))
             CircularProgressIndicator(color = SuccessGreen)
-            Text("Connecting to ${httpState.url}...")
+            Text(stringResource(R.string.receiver_connecting_to, httpState.url))
             TextButton(onClick = onCancelDownload) {
-                Text("Cancel", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -831,15 +863,15 @@ private fun HotspotReceiverContent(
             CircularTransferProgress(
                 progress = httpState.progress,
                 accentColor = SuccessGreen,
-                title = "Downloading ${httpState.metadata.appName}",
-                subtitle = "Via Wi-Fi Hotspot HTTP",
-                directionLabel = "Received"
+                title = stringResource(R.string.receiver_downloading_app, httpState.metadata.appName),
+                subtitle = stringResource(R.string.receiver_via_hotspot_http),
+                directionLabel = stringResource(R.string.progress_direction_received)
             )
             OutlinedButton(
                 onClick = onCancelDownload,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Cancel Download", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.receiver_cancel_download), color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -861,12 +893,12 @@ private fun HotspotReceiverContent(
         is HttpDownloadState.Error -> {
             Icon(
                 imageVector = Icons.Rounded.ErrorOutline,
-                contentDescription = "Download error",
+                contentDescription = stringResource(R.string.receiver_download_error_cd),
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
             Text(
-                text = "Download Failed",
+                text = stringResource(R.string.receiver_download_failed_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -885,13 +917,13 @@ private fun HotspotReceiverContent(
             ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Resume / Retry Download")
+                Text(stringResource(R.string.receiver_resume_retry_download))
             }
             OutlinedButton(
                 onClick = onCancelDownload,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Edit URL / Scan Again")
+                Text(stringResource(R.string.receiver_edit_url_scan_again))
             }
         }
     }
@@ -924,14 +956,14 @@ private fun DownloadCompleteInstallSection(
         ) {
             Icon(
                 imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = "Download complete",
+                contentDescription = stringResource(R.string.receiver_download_complete_cd),
                 tint = SuccessGreen,
                 modifier = Modifier.size(52.dp)
             )
         }
 
         Text(
-            text = "Download Complete!",
+            text = stringResource(R.string.receiver_download_complete_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = SuccessGreen
@@ -955,7 +987,12 @@ private fun DownloadCompleteInstallSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "v${metadata.versionName} · ${FormatUtils.formatBytes(metadata.totalSizeBytes)} · ${FormatUtils.formatDurationMillis(durationMillis)}",
+                        text = stringResource(
+                            R.string.receiver_complete_meta,
+                            metadata.versionName,
+                            FormatUtils.formatBytes(metadata.totalSizeBytes),
+                            FormatUtils.formatDurationMillis(durationMillis)
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -975,7 +1012,7 @@ private fun DownloadCompleteInstallSection(
                     }
                     if (metadata.isSplitApk) {
                         Text(
-                            text = "Split APK Bundle (${savedFiles.size} files) — installs via PackageInstaller",
+                            text = stringResource(R.string.receiver_split_installer_note, savedFiles.size),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1004,7 +1041,11 @@ private fun DownloadCompleteInstallSection(
                 ) {
                     Icon(Icons.Rounded.InstallMobile, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("INSTALL APP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.receiver_install_app_button),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
@@ -1019,7 +1060,7 @@ private fun DownloadCompleteInstallSection(
 
             is InstallState.PendingUserConfirmation -> {
                 Text(
-                    text = "Confirm installation in the Android system dialog...",
+                    text = stringResource(R.string.receiver_confirm_system_install),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -1028,7 +1069,7 @@ private fun DownloadCompleteInstallSection(
                     onClick = onInstallClick,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Tap Install Again")
+                    Text(stringResource(R.string.receiver_tap_install_again))
                 }
             }
 
@@ -1039,7 +1080,7 @@ private fun DownloadCompleteInstallSection(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Installed Successfully!",
+                        text = stringResource(R.string.receiver_installed_success_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = SuccessGreen,
@@ -1061,7 +1102,7 @@ private fun DownloadCompleteInstallSection(
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Installed Successfully - Open App", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.receiver_installed_open_app), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1089,13 +1130,13 @@ private fun DownloadCompleteInstallSection(
                         .fillMaxWidth()
                         .height(52.dp)
                 ) {
-                    Text("Retry Install", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.receiver_retry_install), fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         TextButton(onClick = onDone) {
-            Text("Back to Home")
+            Text(stringResource(R.string.receiver_back_to_home))
         }
     }
 }

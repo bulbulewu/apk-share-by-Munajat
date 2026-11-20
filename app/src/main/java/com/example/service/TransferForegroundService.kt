@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import com.example.R
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
@@ -35,8 +37,11 @@ class TransferForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_START_OR_UPDATE -> {
-                val title = intent.getStringExtra(EXTRA_TITLE) ?: "APK Share Transfer"
-                val text = intent.getStringExtra(EXTRA_TEXT) ?: "Transferring..."
+                val loc = LocaleHelper.localizedContext(this)
+                val title = intent.getStringExtra(EXTRA_TITLE)
+                    ?: loc.getString(R.string.notification_default_title)
+                val text = intent.getStringExtra(EXTRA_TEXT)
+                    ?: loc.getString(R.string.notification_default_text)
                 val progress = intent.getIntExtra(EXTRA_PROGRESS, 0)
                 val indeterminate = intent.getBooleanExtra(EXTRA_INDETERMINATE, true)
                 val notification = NotificationHelper.buildProgressNotification(

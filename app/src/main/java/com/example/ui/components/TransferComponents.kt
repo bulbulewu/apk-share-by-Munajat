@@ -124,6 +124,28 @@ fun TransferProgressBar(
     val remainingBytes = (totalBytes - clampedTransferred).coerceAtLeast(0L)
     val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
 
+    val progressDefaultLabel = stringResource(R.string.progress_default_label)
+    val accessibilityDesc = stringResource(R.string.progress_accessibility_desc, percent, directionLabel)
+    val bytesText = if (totalBytes > 0L) {
+        stringResource(
+            R.string.progress_bytes_with_total,
+            FormatUtils.formatBytes(clampedTransferred),
+            FormatUtils.formatBytes(totalBytes),
+            directionLabel
+        )
+    } else {
+        stringResource(
+            R.string.progress_bytes_no_total,
+            FormatUtils.formatBytes(clampedTransferred),
+            directionLabel
+        )
+    }
+    val remainingText = if (remainingBytes == 0L) {
+        stringResource(R.string.progress_complete)
+    } else {
+        stringResource(R.string.progress_remaining_left, FormatUtils.formatBytes(remainingBytes))
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -134,7 +156,7 @@ fun TransferProgressBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = fileName.ifBlank { "APK Transfer Progress" },
+                text = fileName.ifBlank { progressDefaultLabel },
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -170,7 +192,7 @@ fun TransferProgressBar(
                         current = rawFraction,
                         range = 0f..1f
                     )
-                    contentDescription = "$percent percent $directionLabel"
+                    contentDescription = accessibilityDesc
                 }
                 .testTag(testTagName)
         ) {
@@ -198,11 +220,7 @@ fun TransferProgressBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (totalBytes > 0L) {
-                    "${FormatUtils.formatBytes(clampedTransferred)} / ${FormatUtils.formatBytes(totalBytes)} $directionLabel"
-                } else {
-                    "${FormatUtils.formatBytes(clampedTransferred)} $directionLabel"
-                },
+                text = bytesText,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -210,7 +228,7 @@ fun TransferProgressBar(
             )
             if (totalBytes > 0L) {
                 Text(
-                    text = if (remainingBytes == 0L) "Complete" else "${FormatUtils.formatBytes(remainingBytes)} left",
+                    text = remainingText,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (remainingBytes == 0L) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -226,7 +244,7 @@ fun CircularTransferProgress(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
-    directionLabel: String = "Transferred"
+    directionLabel: String = stringResource(R.string.progress_direction_transferred)
 ) {
     val powerSaver = LocalPowerSaverEnabled.current
     val animatedFraction by animateFloatAsState(
@@ -261,7 +279,7 @@ fun CircularTransferProgress(
                 color = SuccessGreen.copy(alpha = 0.14f)
             ) {
                 Text(
-                    text = "Power Saver Active · Reduced update rate",
+                    text = stringResource(R.string.progress_power_saver_badge),
                     style = MaterialTheme.typography.labelSmall,
                     color = SuccessGreen,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -299,7 +317,11 @@ fun CircularTransferProgress(
                     color = accentColor
                 )
                 Text(
-                    text = "${progress.completedFiles.coerceAtMost(progress.totalFiles)}/${progress.totalFiles} APK(s)",
+                    text = stringResource(
+                        R.string.progress_apk_count,
+                        progress.completedFiles.coerceAtMost(progress.totalFiles),
+                        progress.totalFiles
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -330,15 +352,15 @@ fun CircularTransferProgress(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     MetricPill(
-                        label = "Speed",
+                        label = stringResource(R.string.progress_metric_speed),
                         value = FormatUtils.formatSpeed(progress.speedBytesPerSec)
                     )
                     MetricPill(
-                        label = "Files",
+                        label = stringResource(R.string.progress_metric_files),
                         value = "${progress.completedFiles.coerceAtMost(progress.totalFiles)} / ${progress.totalFiles}"
                     )
                     MetricPill(
-                        label = "ETA",
+                        label = stringResource(R.string.progress_metric_eta),
                         value = FormatUtils.formatEta(progress.etaSeconds)
                     )
                 }
@@ -450,7 +472,7 @@ fun Base64AppIcon(
     if (bitmap != null) {
         Image(
             bitmap = bitmap,
-            contentDescription = "App icon",
+            contentDescription = stringResource(R.string.cd_app_icon),
             modifier = Modifier
                 .size(size)
                 .clip(RoundedCornerShape(14.dp))
@@ -465,7 +487,7 @@ fun Base64AppIcon(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Android,
-                contentDescription = "App icon",
+                contentDescription = stringResource(R.string.cd_app_icon),
                 tint = tint,
                 modifier = Modifier.size(size * 0.6f)
             )
@@ -479,10 +501,11 @@ fun InstalledAppIcon(
     appName: String,
     size: Dp = 48.dp
 ) {
+    val iconDesc = stringResource(R.string.cd_named_app_icon, appName)
     if (icon != null) {
         Image(
             bitmap = icon,
-            contentDescription = "$appName icon",
+            contentDescription = iconDesc,
             modifier = Modifier
                 .size(size)
                 .clip(RoundedCornerShape(12.dp))
@@ -497,7 +520,7 @@ fun InstalledAppIcon(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Android,
-                contentDescription = "$appName icon",
+                contentDescription = iconDesc,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(size * 0.58f)
             )
@@ -510,8 +533,8 @@ fun PermissionRationaleCard(
     missingPermissions: List<String>,
     onGrantClick: () -> Unit,
     modifier: Modifier = Modifier,
-    title: String = "Permissions Needed for Offline Transfer",
-    description: String = "APK Share works 100% offline. Android requires all of these permissions before discovering or sharing with nearby phones:"
+    title: String = stringResource(R.string.permission_rationale_title),
+    description: String = stringResource(R.string.permission_rationale_desc)
 ) {
     val context = LocalContext.current
     Card(
@@ -530,7 +553,7 @@ fun PermissionRationaleCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.Security,
-                    contentDescription = "Permissions required",
+                    contentDescription = stringResource(R.string.permission_required_cd),
                     tint = PrimaryBlue,
                     modifier = Modifier.size(28.dp)
                 )
@@ -547,8 +570,14 @@ fun PermissionRationaleCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             missingPermissions.forEach { perm ->
+                val labelRes = PermissionHelper.friendlyPermissionLabelRes(perm)
+                val label = if (labelRes != null) {
+                    stringResource(labelRes)
+                } else {
+                    perm.substringAfterLast('.')
+                }
                 Text(
-                    text = "• ${PermissionHelper.friendlyPermissionLabel(perm)}",
+                    text = "• $label",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -563,7 +592,7 @@ fun PermissionRationaleCard(
                         .weight(1f)
                         .testTag("grant_permissions_button")
                 ) {
-                    Text("Grant permissions")
+                    Text(stringResource(R.string.permission_grant_button))
                 }
                 OutlinedButton(
                     onClick = {
@@ -577,7 +606,7 @@ fun PermissionRationaleCard(
                     },
                     modifier = Modifier.testTag("open_app_settings_button")
                 ) {
-                    Text("Open Settings")
+                    Text(stringResource(R.string.open_settings))
                 }
             }
         }
@@ -594,17 +623,17 @@ fun ConnectivityRequiredDialog(
     onDismiss: () -> Unit
 ) {
     val title = when {
-        !isBluetoothEnabled && !isWifiEnabled -> "Turn On Bluetooth & Wi-Fi"
-        !isBluetoothEnabled -> "Turn On Bluetooth"
-        else -> "Turn On Wi-Fi"
+        !isBluetoothEnabled && !isWifiEnabled -> stringResource(R.string.connectivity_dialog_title_both)
+        !isBluetoothEnabled -> stringResource(R.string.connectivity_dialog_title_bt)
+        else -> stringResource(R.string.connectivity_dialog_title_wifi)
     }
     val message = when {
         !isBluetoothEnabled && !isWifiEnabled ->
-            "Nearby offline transfer needs both Bluetooth and Wi-Fi turned ON to discover phones and transfer APKs at high speed (no internet needed)."
+            stringResource(R.string.connectivity_dialog_msg_both)
         !isBluetoothEnabled ->
-            "Nearby offline transfer needs Bluetooth turned ON to discover and pair with the other phone."
+            stringResource(R.string.connectivity_dialog_msg_bt)
         else ->
-            "Nearby offline transfer needs Wi-Fi turned ON for high-speed offline transfer (no internet connection is required)."
+            stringResource(R.string.connectivity_dialog_msg_wifi)
     }
 
     AlertDialog(
@@ -633,7 +662,7 @@ fun ConnectivityRequiredDialog(
                             .fillMaxWidth()
                             .testTag("dialog_open_bluetooth_settings_button")
                     ) {
-                        Text("Open Bluetooth Settings")
+                        Text(stringResource(R.string.connectivity_open_bt_settings))
                     }
                     OutlinedButton(
                         onClick = onOpenWifiSettings,
@@ -641,7 +670,7 @@ fun ConnectivityRequiredDialog(
                             .fillMaxWidth()
                             .testTag("dialog_open_wifi_settings_button")
                     ) {
-                        Text("Open Wi-Fi Settings")
+                        Text(stringResource(R.string.connectivity_open_wifi_settings))
                     }
                 }
             }
@@ -652,21 +681,21 @@ fun ConnectivityRequiredDialog(
                     onClick = onOpenBluetoothSettings,
                     modifier = Modifier.testTag("dialog_open_bluetooth_settings_button")
                 ) {
-                    Text("Bluetooth Settings")
+                    Text(stringResource(R.string.connectivity_bt_settings_short))
                 }
             } else if (isBluetoothEnabled && !isWifiEnabled) {
                 Button(
                     onClick = onOpenWifiSettings,
                     modifier = Modifier.testTag("dialog_open_wifi_settings_button")
                 ) {
-                    Text("Wi-Fi Settings")
+                    Text(stringResource(R.string.connectivity_wifi_settings_short))
                 }
             } else {
                 Button(
                     onClick = onRetry,
                     modifier = Modifier.testTag("dialog_retry_connectivity_button")
                 ) {
-                    Text("Check Again")
+                    Text(stringResource(R.string.connectivity_check_again))
                 }
             }
         },
@@ -676,14 +705,14 @@ fun ConnectivityRequiredDialog(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("dialog_dismiss_connectivity_button")
                 ) {
-                    Text("Close")
+                    Text(stringResource(R.string.action_close))
                 }
             } else {
                 TextButton(
                     onClick = onRetry,
                     modifier = Modifier.testTag("dialog_recheck_connectivity_button")
                 ) {
-                    Text("Check Again")
+                    Text(stringResource(R.string.connectivity_check_again))
                 }
             }
         }
@@ -700,17 +729,17 @@ fun ConnectivityRequiredCard(
     modifier: Modifier = Modifier
 ) {
     val title = when {
-        !isBluetoothEnabled && !isWifiEnabled -> "Bluetooth and Wi-Fi are Off"
-        !isBluetoothEnabled -> "Bluetooth is Off"
-        else -> "Wi-Fi is Off"
+        !isBluetoothEnabled && !isWifiEnabled -> stringResource(R.string.connectivity_card_title_both)
+        !isBluetoothEnabled -> stringResource(R.string.connectivity_card_title_bt)
+        else -> stringResource(R.string.connectivity_card_title_wifi)
     }
     val description = when {
         !isBluetoothEnabled && !isWifiEnabled ->
-            "Turn on both Bluetooth and Wi-Fi to start Nearby offline transfer. No internet connection is needed."
+            stringResource(R.string.connectivity_card_desc_both)
         !isBluetoothEnabled ->
-            "Turn on Bluetooth to discover nearby phones offline."
+            stringResource(R.string.connectivity_card_desc_bt)
         else ->
-            "Turn on Wi-Fi for high-speed offline APK transfer (no internet needed)."
+            stringResource(R.string.connectivity_card_desc_wifi)
     }
 
     Card(
@@ -754,7 +783,7 @@ fun ConnectivityRequiredCard(
                 ) {
                     Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open Bluetooth Settings")
+                    Text(stringResource(R.string.connectivity_open_bt_settings))
                 }
             }
             if (!isWifiEnabled) {
@@ -766,7 +795,7 @@ fun ConnectivityRequiredCard(
                 ) {
                     Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open Wi-Fi Settings")
+                    Text(stringResource(R.string.connectivity_open_wifi_settings))
                 }
             }
             OutlinedButton(
@@ -777,7 +806,7 @@ fun ConnectivityRequiredCard(
             ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Check Again")
+                Text(stringResource(R.string.connectivity_check_again))
             }
         }
     }
@@ -802,12 +831,12 @@ fun UnknownSourcesPermissionCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.Shield,
-                    contentDescription = "Install unknown apps permission",
+                    contentDescription = stringResource(R.string.unknown_sources_cd),
                     tint = WarningAmber
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Allow Installing Apps",
+                    text = stringResource(R.string.unknown_sources_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -911,7 +940,7 @@ fun QrCodeScannerView(
             color = Color.Black.copy(alpha = 0.65f)
         ) {
             Text(
-                text = "Point camera at Phone A's QR code",
+                text = stringResource(R.string.qr_scanner_hint),
                 color = Color.White,
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)

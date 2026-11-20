@@ -7,7 +7,9 @@ import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
 import android.util.Log
+import com.example.R
 import com.example.util.FormatUtils
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -130,7 +132,10 @@ class ApkStorageManager(private val context: Context) {
     fun ensureSpaceOrThrow(requiredBytes: Long) {
         if (!checkFreeSpaceFor(requiredBytes)) {
             throw IOException(
-                "Storage full: at least ${FormatUtils.formatBytes(requiredBytes)} free space is required."
+                LocaleHelper.localizedContext(context).getString(
+                    R.string.error_storage_full_required,
+                    FormatUtils.formatBytes(requiredBytes)
+                )
             )
         }
     }

@@ -1,6 +1,8 @@
 package com.example
 
+import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -40,9 +42,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,7 +73,10 @@ import com.example.ui.theme.ApkShareTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.ReceiverViewModel
 import com.example.ui.viewmodel.SenderViewModel
+import com.example.util.ApkShareHelper
 import com.example.util.BiometricHelper
+import com.example.util.LocaleHelper
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -90,6 +98,10 @@ object SenderTransferRoute
 object ReceiverRoute
 
 class MainActivity : FragmentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrapBaseContext(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,7 +148,26 @@ class MainActivity : FragmentActivity() {
                 container.localHttpApkServer.powerSaverEnabled = settings.powerSaverEnabled
             }
 
-            CompositionLocalProvider(LocalPowerSaverEnabled provides settings.powerSaverEnabled) {
+            LaunchedEffect(lockChecked, settings.language) {
+                if (lockChecked) {
+                    LocaleHelper.applyAppLocale(this@MainActivity, settings.language)
+                }
+            }
+
+            val baseConfig = LocalConfiguration.current
+            val (localizedContext, localizedConfig) = remember(settings.language, baseConfig) {
+                LocaleHelper.createLocalizedComposeContext(
+                    baseContext = this@MainActivity,
+                    baseConfig = baseConfig,
+                    languageCode = settings.language
+                )
+            }
+
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalConfiguration provides localizedConfig,
+                LocalPowerSaverEnabled provides settings.powerSaverEnabled
+            ) {
                 ApkShareTheme(themePreference = settings.themePreference) {
                     when {
                         !lockChecked -> {
@@ -151,9 +182,11 @@ class MainActivity : FragmentActivity() {
                         isLocked -> {
                             BiometricLockGate(
                                 onRequestUnlock = { onError ->
-                                    if (BiometricHelper.isBiometricAvailable(this)) {
+                                    if (BiometricHelper.isBiometricAvailable(this@MainActivity)) {
                                         BiometricHelper.authenticate(
-                                            activity = this,
+                                            activity = this@MainActivity,
+                                            title = localizedContext.getString(R.string.biometric_prompt_title),
+                                            subtitle = localizedContext.getString(R.string.biometric_prompt_subtitle),
                                             onSuccess = { mainViewModel.unlockApp() },
                                             onError = onError
                                         )
@@ -165,12 +198,57 @@ class MainActivity : FragmentActivity() {
                         }
 
                         else -> {
+                            val shareScope = rememberCoroutineScope()
+                            var sharingHistoryItemId by remember { mutableStateOf<Long?>(null) }
+
                             ApkShareNavHost(
                                 mainViewModel = mainViewModel,
                                 senderViewModel = senderViewModel,
                                 receiverViewModel = receiverViewModel,
                                 settings = settings,
-                                history = history
+                                history = history,
+                                sharingHistoryItemId = sharingHistoryItemId,
+                                onShareHistoryItem = { item ->
+                                    if (sharingHistoryItemId != null) return@ApkShareNavHost
+                                    sharingHistoryItemId = item.id
+                                    shareScope.launch {
+                                        try {
+                                            val resolved = ApkShareHelper.resolveHistoryShareableFile(
+                                                context = localizedContext,
+                                                item = item,
+                                                storageManager = container.apkStorageManager,
+                                                apkExtractor = container.apkExtractor
+                                            )
+                                            if (resolved == null) {
+                                                Toast.makeText(
+                                                    localizedContext,
+                                                    localizedContext.getString(R.string.share_history_file_missing),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                val launched = ApkShareHelper.launchShareSheet(
+                                                    context = localizedContext,
+                                                    file = resolved.file,
+                                                    appName = resolved.appName,
+                                                    isSplitBundle = resolved.isSplitBundle
+                                                )
+                                                if (!launched) {
+                                                    Toast.makeText(
+                                                        localizedContext,
+                                                        localizedContext.getString(R.string.share_no_app_error),
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        } finally {
+                                            sharingHistoryItemId = null
+                                        }
+                                    }
+                                },
+                                onLanguageSelected = { lang ->
+                                    mainViewModel.updateLanguage(lang)
+                                    LocaleHelper.applyAppLocale(this@MainActivity, lang)
+                                }
                             )
                         }
                     }
@@ -203,17 +281,17 @@ private fun BiometricLockGate(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Fingerprint,
-                contentDescription = "Locked",
+                contentDescription = stringResource(R.string.cd_locked),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
             )
             Text(
-                text = "APK Share is Locked",
+                text = stringResource(R.string.biometric_locked_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = errorMessage ?: "Verify with biometrics or device PIN to continue.",
+                text = errorMessage ?: stringResource(R.string.biometric_locked_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -226,7 +304,7 @@ private fun BiometricLockGate(
                 },
                 modifier = Modifier.testTag("unlock_biometric_button")
             ) {
-                Text("Unlock")
+                Text(stringResource(R.string.biometric_unlock_button))
             }
         }
     }
@@ -238,7 +316,10 @@ private fun ApkShareNavHost(
     senderViewModel: SenderViewModel,
     receiverViewModel: ReceiverViewModel,
     settings: com.example.data.prefs.UserSettings,
-    history: List<com.example.data.db.TransferHistoryEntity>
+    history: List<com.example.data.db.TransferHistoryEntity>,
+    sharingHistoryItemId: Long?,
+    onShareHistoryItem: (com.example.data.db.TransferHistoryEntity) -> Unit,
+    onLanguageSelected: (String) -> Unit
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -369,7 +450,9 @@ private fun ApkShareNavHost(
                         HistoryScreen(
                             history = history,
                             onDeleteItem = { mainViewModel.deleteHistoryItem(it) },
-                            onClearAll = { mainViewModel.clearHistory() }
+                            onClearAll = { mainViewModel.clearHistory() },
+                            onShareItem = onShareHistoryItem,
+                            sharingItemId = sharingHistoryItemId
                         )
                     }
 
@@ -380,7 +463,8 @@ private fun ApkShareNavHost(
                             onUpdateTheme = { mainViewModel.updateThemePreference(it) },
                             onToggleBiometric = { mainViewModel.setBiometricLockEnabled(it) },
                             onTogglePublicDownloads = { mainViewModel.setExportToPublicDownloads(it) },
-                            onTogglePowerSaver = { mainViewModel.setPowerSaverEnabled(it) }
+                            onTogglePowerSaver = { mainViewModel.setPowerSaverEnabled(it) },
+                            onUpdateLanguage = onLanguageSelected
                         )
                     }
 

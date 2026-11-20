@@ -24,7 +24,7 @@ class MainViewModel(
     val settings: StateFlow<UserSettings> = settingsDataStore.settings.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = UserSettings()
+        initialValue = UserSettings(language = settingsDataStore.getCachedLanguage())
     )
 
     val history: StateFlow<List<TransferHistoryEntity>> = historyRepository.recentTransfers.stateIn(
@@ -69,6 +69,10 @@ class MainViewModel(
 
     fun setPowerSaverEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsDataStore.setPowerSaverEnabled(enabled) }
+    }
+
+    fun updateLanguage(languageCode: String) {
+        viewModelScope.launch { settingsDataStore.updateLanguage(languageCode) }
     }
 
     fun deleteHistoryItem(id: Long) {

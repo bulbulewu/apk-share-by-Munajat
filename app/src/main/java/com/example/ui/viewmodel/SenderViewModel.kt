@@ -21,6 +21,8 @@ import com.example.transfer.HttpServerStatus
 import com.example.transfer.LocalHttpApkServer
 import com.example.transfer.NearbySenderState
 import com.example.transfer.NearbyTransferManager
+import com.example.util.ApkShareHelper
+import com.example.util.ShareableApkResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -232,6 +234,33 @@ class SenderViewModel(
                 _extractionState.value = ExtractionUiState.Error(
                     err.message ?: "Could not extract APK for ${app.appName}."
                 )
+            }
+        }
+    }
+
+    fun prepareAndShareApp(
+        app: InstalledAppInfo,
+        onReadyToShare: (ShareableApkResult) -> Unit,
+        onError: (String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            _selectedApp.value = app
+            _extractionState.value = ExtractionUiState.Extracting(app.appName)
+            val extractedResult = apkExtractor.extractBundle(app)
+            extractedResult.onSuccess { bundle ->
+                val shareableResult = runCatching { ApkShareHelper.prepareShareableFile(bundle) }
+                shareableResult.onSuccess { shareable ->
+                    _extractionState.value = ExtractionUiState.Ready(bundle)
+                    onReadyToShare(shareable)
+                }.onFailure { err ->
+                    val message = err.message
+                    _extractionState.value = ExtractionUiState.Error(message.orEmpty())
+                    onError(message)
+                }
+            }.onFailure { err ->
+                val message = err.message
+                _extractionState.value = ExtractionUiState.Error(message.orEmpty())
+                onError(message)
             }
         }
     }

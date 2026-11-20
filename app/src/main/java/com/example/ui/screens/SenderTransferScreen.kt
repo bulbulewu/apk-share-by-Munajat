@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.model.ExtractedApkBundle
 import com.example.transfer.HotspotInfo
 import com.example.transfer.HttpServerStatus
@@ -217,7 +219,11 @@ fun SenderTransferScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (hotspotModeActive) "Wi-Fi Hotspot Mode" else "Send App",
+                        text = if (hotspotModeActive) {
+                            stringResource(R.string.sender_title_hotspot)
+                        } else {
+                            stringResource(R.string.sender_title_nearby)
+                        },
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -228,7 +234,10 @@ fun SenderTransferScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("sender_transfer_back")
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
@@ -258,8 +267,8 @@ fun SenderTransferScreen(
                             onGrantClick = {
                                 hotspotPermissionLauncher.launch(missingHotspotPerms.toTypedArray())
                             },
-                            title = "Permissions Needed for Auto-Hotspot",
-                            description = "Grant Nearby Wi-Fi and Location permissions to auto-start a local Wi-Fi hotspot, or turn on Portable Hotspot manually in Phone Settings below:"
+                            title = stringResource(R.string.sender_hotspot_perms_title),
+                            description = stringResource(R.string.sender_hotspot_perms_desc)
                         )
                     }
                     val bundle = (extractionState as? ExtractionUiState.Ready)?.bundle
@@ -278,7 +287,11 @@ fun SenderTransferScreen(
                             },
                             onMarkSent = {
                                 viewModel.markHotspotTransferComplete()
-                                Toast.makeText(context, "Saved to Transfer History", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.sender_saved_history_toast),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                                 handleBack()
                             },
                             onCancel = handleBack
@@ -297,7 +310,7 @@ fun SenderTransferScreen(
                     ) {
                         Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Try Wi-Fi Hotspot Mode Instead")
+                        Text(stringResource(R.string.sender_try_hotspot_instead))
                     }
                 } else if (!connectivity.isReadyForNearby) {
                     ConnectivityRequiredCard(
@@ -318,13 +331,13 @@ fun SenderTransferScreen(
                     ) {
                         Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Try Wi-Fi Hotspot Mode Instead")
+                        Text(stringResource(R.string.sender_try_hotspot_instead))
                     }
                 } else {
                     when (val state = nearbyState) {
                         is NearbySenderState.Idle -> {
                             CircularProgressIndicator()
-                            Text("Starting transfer...")
+                            Text(stringResource(R.string.sender_starting_transfer))
                         }
 
                         is NearbySenderState.WaitingForReceiver -> {
@@ -346,19 +359,19 @@ fun SenderTransferScreen(
                                 centerIcon = {
                                     Icon(
                                         imageVector = Icons.Rounded.WifiTethering,
-                                        contentDescription = "Advertising",
+                                        contentDescription = stringResource(R.string.sender_advertising_cd),
                                         tint = Color.White,
                                         modifier = Modifier.size(32.dp)
                                     )
                                 }
                             )
                             Text(
-                                text = "Waiting for receiver...",
+                                text = stringResource(R.string.sender_waiting_title),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Visible as \"${state.deviceName}\" — Phone B can tap this device or scan the QR code below.",
+                                text = stringResource(R.string.sender_waiting_subtitle, state.deviceName),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -387,7 +400,7 @@ fun SenderTransferScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "Find Device QR · #$pairCode",
+                                                text = stringResource(R.string.sender_find_device_qr_title, pairCode),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -395,7 +408,13 @@ fun SenderTransferScreen(
                                                 onClick = { showPairQr = !showPairQr },
                                                 modifier = Modifier.testTag("toggle_sender_qr_button")
                                             ) {
-                                                Text(if (showPairQr) "Hide QR" else "Show QR")
+                                                Text(
+                                                    if (showPairQr) {
+                                                        stringResource(R.string.sender_hide_qr)
+                                                    } else {
+                                                        stringResource(R.string.sender_show_qr)
+                                                    }
+                                                )
                                             }
                                         }
                                         if (showPairQr) {
@@ -406,14 +425,14 @@ fun SenderTransferScreen(
                                             ) {
                                                 Image(
                                                     bitmap = pairQrBitmap,
-                                                    contentDescription = "QR code to find this sender device",
+                                                    contentDescription = stringResource(R.string.sender_qr_cd),
                                                     modifier = Modifier
                                                         .size(172.dp)
                                                         .padding(10.dp)
                                                 )
                                             }
                                             Text(
-                                                text = "On Phone B, tap \"Scan QR to Find Device\" to pair instantly",
+                                                text = stringResource(R.string.sender_qr_hint),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 textAlign = TextAlign.Center
@@ -433,13 +452,13 @@ fun SenderTransferScreen(
                             ) {
                                 Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Try Wi-Fi Hotspot Mode")
+                                Text(stringResource(R.string.sender_try_hotspot_mode))
                             }
                             TextButton(
                                 onClick = handleBack,
                                 modifier = Modifier.testTag("cancel_waiting_button")
                             ) {
-                                Text("Cancel", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
                             }
                         }
 
@@ -449,16 +468,25 @@ fun SenderTransferScreen(
                                 onDismissRequest = {
                                     viewModel.rejectNearbyConnection(state.connection.endpointId)
                                 },
-                                title = { Text("Accept Receiver?") },
+                                title = { Text(stringResource(R.string.sender_accept_receiver_title)) },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("\"${state.connection.deviceName}\" wants to receive ${state.bundle.appName}.")
+                                        Text(
+                                            stringResource(
+                                                R.string.sender_accept_receiver_body,
+                                                state.connection.deviceName,
+                                                state.bundle.appName
+                                            )
+                                        )
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = MaterialTheme.colorScheme.surfaceVariant
                                         ) {
                                             Text(
-                                                text = "Pairing Code: ${state.connection.authDigits}",
+                                                text = stringResource(
+                                                    R.string.sender_pairing_code,
+                                                    state.connection.authDigits
+                                                ),
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(12.dp)
@@ -471,7 +499,7 @@ fun SenderTransferScreen(
                                         onClick = { viewModel.acceptNearbyConnection(state.connection.endpointId) },
                                         modifier = Modifier.testTag("accept_connection_button")
                                     ) {
-                                        Text("Accept")
+                                        Text(stringResource(R.string.action_accept))
                                     }
                                 },
                                 dismissButton = {
@@ -479,7 +507,7 @@ fun SenderTransferScreen(
                                         onClick = { viewModel.rejectNearbyConnection(state.connection.endpointId) },
                                         modifier = Modifier.testTag("decline_connection_button")
                                     ) {
-                                        Text("Decline")
+                                        Text(stringResource(R.string.action_decline))
                                     }
                                 }
                             )
@@ -490,17 +518,17 @@ fun SenderTransferScreen(
                             Spacer(modifier = Modifier.height(24.dp))
                             CircularProgressIndicator()
                             Text(
-                                text = "Connected to ${state.peerName}",
+                                text = stringResource(R.string.sender_connected_to, state.peerName),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Waiting for ${state.peerName} to tap Accept...",
+                                text = stringResource(R.string.sender_waiting_receiver_accept, state.peerName),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             TextButton(onClick = handleBack) {
-                                Text("Cancel", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
                             }
                         }
 
@@ -509,9 +537,9 @@ fun SenderTransferScreen(
                             CircularTransferProgress(
                                 progress = state.progress,
                                 accentColor = PrimaryBlue,
-                                title = "Sending to ${state.peerName}",
-                                subtitle = "Keep both phones close until transfer finishes",
-                                directionLabel = "Sent"
+                                title = stringResource(R.string.sender_sending_to, state.peerName),
+                                subtitle = stringResource(R.string.sender_keep_phones_close),
+                                directionLabel = stringResource(R.string.progress_direction_sent)
                             )
                             OutlinedButton(
                                 onClick = handleBack,
@@ -520,7 +548,7 @@ fun SenderTransferScreen(
                                     .height(48.dp)
                                     .testTag("cancel_sending_button")
                             ) {
-                                Text("Cancel Transfer", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.sender_cancel_transfer), color = MaterialTheme.colorScheme.error)
                             }
                         }
 
@@ -535,19 +563,23 @@ fun SenderTransferScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.CheckCircle,
-                                    contentDescription = "Sent successfully",
+                                    contentDescription = stringResource(R.string.sender_sent_cd),
                                     tint = SuccessGreen,
                                     modifier = Modifier.size(56.dp)
                                 )
                             }
                             Text(
-                                text = "Sent Successfully!",
+                                text = stringResource(R.string.sender_sent_success_title),
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = SuccessGreen
                             )
                             Text(
-                                text = "${state.bundle.appName} delivered to ${state.peerName}",
+                                text = stringResource(
+                                    R.string.sender_sent_delivered_to,
+                                    state.bundle.appName,
+                                    state.peerName
+                                ),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
                             )
@@ -560,12 +592,29 @@ fun SenderTransferScreen(
                                     modifier = Modifier.padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    DetailRow("App", "${state.bundle.appName} (v${state.bundle.versionName})")
-                                    DetailRow("Total Size", FormatUtils.formatBytes(state.bundle.totalSizeBytes))
-                                    DetailRow("Time Taken", FormatUtils.formatDurationMillis(state.durationMillis))
                                     DetailRow(
-                                        "Package Type",
-                                        if (state.bundle.isSplitApk) "Split APK Bundle (${state.bundle.files.size} files)" else "Single APK"
+                                        stringResource(R.string.sender_detail_app),
+                                        stringResource(
+                                            R.string.sender_detail_app_value,
+                                            state.bundle.appName,
+                                            state.bundle.versionName
+                                        )
+                                    )
+                                    DetailRow(
+                                        stringResource(R.string.sender_detail_total_size),
+                                        FormatUtils.formatBytes(state.bundle.totalSizeBytes)
+                                    )
+                                    DetailRow(
+                                        stringResource(R.string.sender_detail_time_taken),
+                                        FormatUtils.formatDurationMillis(state.durationMillis)
+                                    )
+                                    DetailRow(
+                                        stringResource(R.string.sender_detail_package_type),
+                                        if (state.bundle.isSplitApk) {
+                                            stringResource(R.string.label_split_apk_bundle, state.bundle.files.size)
+                                        } else {
+                                            stringResource(R.string.label_single_apk)
+                                        }
                                     )
                                 }
                             }
@@ -576,7 +625,7 @@ fun SenderTransferScreen(
                                     .height(52.dp)
                                     .testTag("sent_done_button")
                             ) {
-                                Text("Done", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.action_done), fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -584,12 +633,12 @@ fun SenderTransferScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             Icon(
                                 imageVector = Icons.Rounded.ErrorOutline,
-                                contentDescription = "Error",
+                                contentDescription = stringResource(R.string.cd_error),
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(64.dp)
                             )
                             Text(
-                                text = "Transfer Failed",
+                                text = stringResource(R.string.sender_transfer_failed_title),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -622,7 +671,7 @@ fun SenderTransferScreen(
                             ) {
                                 Icon(Icons.Rounded.Refresh, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Retry Nearby")
+                                Text(stringResource(R.string.sender_retry_nearby))
                             }
                             OutlinedButton(
                                 onClick = { viewModel.switchToHotspotFallback() },
@@ -633,7 +682,7 @@ fun SenderTransferScreen(
                             ) {
                                 Icon(Icons.Rounded.WifiTethering, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Try Wi-Fi Hotspot Mode")
+                                Text(stringResource(R.string.sender_try_hotspot_mode))
                             }
                         }
                     }
@@ -680,13 +729,17 @@ private fun HotspotSenderView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (hotspotInfo.isActive) "Hotspot Active" else "Hotspot Server Ready",
+                    text = if (hotspotInfo.isActive) {
+                        stringResource(R.string.sender_hotspot_active)
+                    } else {
+                        stringResource(R.string.sender_hotspot_server_ready)
+                    },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (hotspotInfo.isActive) SuccessGreen else PrimaryBlue
                 )
                 IconButton(onClick = onRefreshIp) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = "Refresh IP")
+                    Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.sender_refresh_ip_cd))
                 }
             }
             Text(
@@ -695,10 +748,10 @@ private fun HotspotSenderView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (!hotspotInfo.ssid.isNullOrBlank()) {
-                DetailRow("Wi-Fi Name (SSID)", hotspotInfo.ssid)
+                DetailRow(stringResource(R.string.sender_hotspot_ssid_label), hotspotInfo.ssid)
             }
             if (!hotspotInfo.passphrase.isNullOrBlank()) {
-                DetailRow("Password", hotspotInfo.passphrase)
+                DetailRow(stringResource(R.string.sender_hotspot_password_label), hotspotInfo.passphrase)
             }
             if (!hotspotInfo.isActive) {
                 OutlinedButton(
@@ -707,7 +760,7 @@ private fun HotspotSenderView(
                 ) {
                     Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open Phone Hotspot Settings")
+                    Text(stringResource(R.string.sender_open_hotspot_settings))
                 }
             }
         }
@@ -721,7 +774,7 @@ private fun HotspotSenderView(
         ) {
             Image(
                 bitmap = qrBitmap,
-                contentDescription = "QR code for APK download",
+                contentDescription = stringResource(R.string.sender_hotspot_qr_cd),
                 modifier = Modifier
                     .size(220.dp)
                     .padding(14.dp)
@@ -741,7 +794,7 @@ private fun HotspotSenderView(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Download URL (Port ${serverStatus.port})",
+                    text = stringResource(R.string.sender_download_url_port, serverStatus.port),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -754,11 +807,15 @@ private fun HotspotSenderView(
             IconButton(
                 onClick = {
                     clipboard.setText(AnnotatedString(fullUrl))
-                    Toast.makeText(context, "URL copied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.sender_url_copied_toast),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 },
                 modifier = Modifier.testTag("copy_hotspot_url_button")
             ) {
-                Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy URL")
+                Icon(Icons.Rounded.ContentCopy, contentDescription = stringResource(R.string.sender_copy_url_cd))
             }
         }
     }
@@ -781,12 +838,12 @@ private fun HotspotSenderView(
                 bytesTransferred = serverStatus.bytesServed,
                 totalBytes = effectiveTotalBytes,
                 accentColor = if (serverStatus.bytesServed >= effectiveTotalBytes && effectiveTotalBytes > 0L) SuccessGreen else PrimaryBlue,
-                directionLabel = "Sent",
+                directionLabel = stringResource(R.string.progress_direction_sent),
                 fileName = when {
-                    serverStatus.activeClients > 0 -> "Sending ${bundle.appName} via Hotspot..."
-                    serverStatus.bytesServed >= effectiveTotalBytes && effectiveTotalBytes > 0L -> "Sent ${bundle.appName}"
-                    serverStatus.bytesServed > 0L -> "Transfer Paused · ${bundle.appName}"
-                    else -> "Waiting for receiver to download..."
+                    serverStatus.activeClients > 0 -> stringResource(R.string.sender_hotspot_sending_app, bundle.appName)
+                    serverStatus.bytesServed >= effectiveTotalBytes && effectiveTotalBytes > 0L -> stringResource(R.string.sender_hotspot_sent_app, bundle.appName)
+                    serverStatus.bytesServed > 0L -> stringResource(R.string.sender_hotspot_paused_app, bundle.appName)
+                    else -> stringResource(R.string.sender_hotspot_waiting_download)
                 },
                 testTagName = "hotspot_transfer_progress_bar"
             )
@@ -821,14 +878,14 @@ private fun HotspotSenderView(
             onClick = onCancel,
             modifier = Modifier.weight(1f)
         ) {
-            Text("Stop Server")
+            Text(stringResource(R.string.sender_stop_server))
         }
         Button(
             onClick = onMarkSent,
             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen, contentColor = Color.White),
             modifier = Modifier.weight(1f)
         ) {
-            Text("Done")
+            Text(stringResource(R.string.action_done))
         }
     }
 }
@@ -853,12 +910,20 @@ private fun BundleSummaryCard(bundle: ExtractedApkBundle) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "v${bundle.versionName} · ${FormatUtils.formatBytes(bundle.totalSizeBytes)}",
+                    text = stringResource(
+                        R.string.sender_bundle_meta,
+                        bundle.versionName,
+                        FormatUtils.formatBytes(bundle.totalSizeBytes)
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = if (bundle.isSplitApk) "Split APK Bundle (${bundle.files.size} files)" else bundle.files.firstOrNull()?.name.orEmpty(),
+                    text = if (bundle.isSplitApk) {
+                        stringResource(R.string.label_split_apk_bundle, bundle.files.size)
+                    } else {
+                        bundle.files.firstOrNull()?.name.orEmpty()
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = PrimaryBlue
                 )

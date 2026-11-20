@@ -27,8 +27,8 @@ object BiometricHelper {
 
     fun authenticate(
         activity: FragmentActivity,
-        title: String = "Unlock APK Share",
-        subtitle: String = "Verify your identity to access offline transfers",
+        title: String = LocaleHelper.localizedContext(activity).getString(com.example.R.string.biometric_prompt_title),
+        subtitle: String = LocaleHelper.localizedContext(activity).getString(com.example.R.string.biometric_prompt_subtitle),
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -59,7 +59,10 @@ object BiometricHelper {
             prompt.authenticate(promptInfo)
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to show biometric prompt", t)
-            onError(t.message ?: "Biometric authentication unavailable")
+            onError(
+                t.message ?: LocaleHelper.localizedContext(activity)
+                    .getString(com.example.R.string.biometric_unavailable_error)
+            )
         }
     }
 }

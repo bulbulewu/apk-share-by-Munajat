@@ -97,6 +97,22 @@ object PermissionHelper {
         )
     }
 
+    @androidx.annotation.StringRes
+    fun friendlyPermissionLabelRes(permission: String): Int? {
+        return when (permission) {
+            Manifest.permission.BLUETOOTH_ADVERTISE -> com.example.R.string.permission_label_bt_advertise
+            Manifest.permission.BLUETOOTH_CONNECT -> com.example.R.string.permission_label_bt_connect
+            Manifest.permission.BLUETOOTH_SCAN -> com.example.R.string.permission_label_bt_scan
+            Manifest.permission.NEARBY_WIFI_DEVICES -> com.example.R.string.permission_label_nearby_wifi
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION -> com.example.R.string.permission_label_location
+            Manifest.permission.POST_NOTIFICATIONS -> com.example.R.string.permission_label_notifications
+            Manifest.permission.WRITE_EXTERNAL_STORAGE -> com.example.R.string.permission_label_storage
+            Manifest.permission.CAMERA -> com.example.R.string.permission_label_camera
+            else -> null
+        }
+    }
+
     fun friendlyPermissionLabel(permission: String): String {
         return when (permission) {
             Manifest.permission.BLUETOOTH_ADVERTISE -> "Bluetooth (make device visible to nearby phones)"

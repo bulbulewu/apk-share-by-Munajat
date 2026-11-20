@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -55,11 +58,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.model.InstalledAppInfo
 import com.example.ui.components.InstalledAppIcon
 import com.example.ui.theme.PrimaryBlue
@@ -67,6 +73,7 @@ import com.example.ui.viewmodel.AppSortOrder
 import com.example.ui.viewmodel.AppsUiState
 import com.example.ui.viewmodel.ExtractionUiState
 import com.example.ui.viewmodel.SenderViewModel
+import com.example.util.ApkShareHelper
 import com.example.util.FormatUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,16 +83,46 @@ fun AppPickerScreen(
     onBack: () -> Unit,
     onProceedToTransfer: () -> Unit
 ) {
+    val context = LocalContext.current
     val appsState by viewModel.appsUiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
     val selectedApp by viewModel.selectedApp.collectAsStateWithLifecycle()
     val extractionState by viewModel.extractionState.collectAsStateWithLifecycle()
+    val isExtracting = extractionState is ExtractionUiState.Extracting
+
+    val shareApp: (InstalledAppInfo) -> Unit = { targetApp ->
+        viewModel.prepareAndShareApp(
+            app = targetApp,
+            onReadyToShare = { shareable ->
+                val launched = ApkShareHelper.launchShareSheet(
+                    context = context,
+                    file = shareable.file,
+                    appName = shareable.appName,
+                    isSplitBundle = shareable.isSplitBundle
+                )
+                if (!launched) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.share_no_app_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onError = { errMsg ->
+                Toast.makeText(
+                    context,
+                    errMsg ?: context.getString(R.string.share_failed_error, targetApp.appName),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Select App to Send", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.picker_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
@@ -93,7 +130,10 @@ fun AppPickerScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("picker_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 },
                 actions = {
@@ -103,7 +143,7 @@ fun AppPickerScreen(
                             .minimumInteractiveComponentSize()
                             .testTag("refresh_apps_button")
                     ) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh apps")
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.picker_refresh_cd))
                     }
                 }
             )
@@ -137,17 +177,25 @@ fun AppPickerScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = buildString {
-                                        append(FormatUtils.formatBytes(app.totalSizeBytes))
-                                        if (app.isSplitApk) append(" · ${app.totalApkFileCount} splits")
+                                    text = if (app.isSplitApk) {
+                                        stringResource(
+                                            R.string.picker_splits_suffix,
+                                            FormatUtils.formatBytes(app.totalSizeBytes),
+                                            app.totalApkFileCount
+                                        )
+                                    } else {
+                                        FormatUtils.formatBytes(app.totalSizeBytes)
                                     },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = PrimaryBlue
                                 )
                             }
                             if (extractionState is ExtractionUiState.Error) {
+                                val errorMsg = (extractionState as ExtractionUiState.Error).message
                                 Text(
-                                    text = (extractionState as ExtractionUiState.Error).message,
+                                    text = errorMsg.ifBlank {
+                                        stringResource(R.string.share_failed_error, app.appName)
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -177,25 +225,43 @@ fun AppPickerScreen(
                                             color = Color.White
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Preparing APK...")
+                                        Text(stringResource(R.string.picker_preparing_apk))
                                     } else {
                                         Icon(Icons.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Send Nearby", fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.picker_send_nearby), fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 OutlinedButton(
                                     onClick = {
                                         viewModel.startHotspotModeDirect(onProceedToTransfer)
                                     },
-                                    enabled = extractionState !is ExtractionUiState.Extracting,
+                                    enabled = !isExtracting,
                                     modifier = Modifier
                                         .height(50.dp)
                                         .testTag("send_hotspot_direct_button")
                                 ) {
-                                    Icon(Icons.Rounded.QrCode2, contentDescription = "Wi-Fi Hotspot QR", modifier = Modifier.size(20.dp))
+                                    Icon(
+                                        Icons.Rounded.QrCode2,
+                                        contentDescription = stringResource(R.string.picker_hotspot_cd),
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Hotspot")
+                                    Text(stringResource(R.string.picker_hotspot_button))
+                                }
+                                OutlinedIconButton(
+                                    onClick = { shareApp(app) },
+                                    enabled = !isExtracting,
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("share_selected_app_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Share,
+                                        contentDescription = stringResource(R.string.share_apk_cd),
+                                        tint = PrimaryBlue
+                                    )
                                 }
                             }
                         }
@@ -218,12 +284,12 @@ fun AppPickerScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.updateSearchQuery(it) },
-                    placeholder = { Text("Search installed user apps...") },
+                    placeholder = { Text(stringResource(R.string.picker_search_hint)) },
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+                                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.picker_clear_search_cd))
                             }
                         }
                     },
@@ -245,22 +311,22 @@ fun AppPickerScreen(
                     FilterChip(
                         selected = sortOrder == AppSortOrder.NAME,
                         onClick = { viewModel.updateSortOrder(AppSortOrder.NAME) },
-                        label = { Text("Name") }
+                        label = { Text(stringResource(R.string.picker_sort_name)) }
                     )
                     FilterChip(
                         selected = sortOrder == AppSortOrder.SIZE,
                         onClick = { viewModel.updateSortOrder(AppSortOrder.SIZE) },
-                        label = { Text("Largest") }
+                        label = { Text(stringResource(R.string.picker_sort_largest)) }
                     )
                     FilterChip(
                         selected = sortOrder == AppSortOrder.INSTALL_DATE,
                         onClick = { viewModel.updateSortOrder(AppSortOrder.INSTALL_DATE) },
-                        label = { Text("Newest") }
+                        label = { Text(stringResource(R.string.picker_sort_newest)) }
                     )
                 }
 
                 Text(
-                    text = "Select 1 app to share (Split APKs are bundled automatically · Multi-select coming in next update)",
+                    text = stringResource(R.string.picker_single_select_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -277,7 +343,7 @@ fun AppPickerScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 CircularProgressIndicator()
-                                Text("Scanning user apps...")
+                                Text(stringResource(R.string.picker_scanning_apps))
                             }
                         }
                     }
@@ -298,7 +364,7 @@ fun AppPickerScreen(
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 Button(onClick = { viewModel.loadApps() }) {
-                                    Text("Retry")
+                                    Text(stringResource(R.string.action_retry))
                                 }
                             }
                         }
@@ -313,7 +379,11 @@ fun AppPickerScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (searchQuery.isBlank()) "No user-installed apps found." else "No apps match \"$searchQuery\".",
+                                    text = if (searchQuery.isBlank()) {
+                                        stringResource(R.string.picker_empty_apps)
+                                    } else {
+                                        stringResource(R.string.picker_empty_search, searchQuery)
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -334,11 +404,13 @@ fun AppPickerScreen(
                                     AppListItemCard(
                                         app = app,
                                         isSelected = isSelected,
+                                        isExtracting = isExtracting,
                                         loadIcon = { viewModel.loadIcon(app.packageName) },
                                         onClick = {
                                             viewModel.clearExtractionError()
                                             viewModel.selectApp(app)
-                                        }
+                                        },
+                                        onShareClick = { shareApp(app) }
                                     )
                                 }
                             }
@@ -354,8 +426,10 @@ fun AppPickerScreen(
 private fun AppListItemCard(
     app: InstalledAppInfo,
     isSelected: Boolean,
+    isExtracting: Boolean,
     loadIcon: suspend () -> ImageBitmap?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onShareClick: () -> Unit
 ) {
     var icon by remember(app.packageName) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(app.packageName) {
@@ -410,7 +484,7 @@ private fun AppListItemCard(
                             color = PrimaryBlue.copy(alpha = 0.14f)
                         ) {
                             Text(
-                                text = "Split · ${app.totalApkFileCount}",
+                                text = stringResource(R.string.picker_split_badge, app.totalApkFileCount),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = PrimaryBlue,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -426,17 +500,35 @@ private fun AppListItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "v${app.versionName} · ${FormatUtils.formatBytes(app.totalSizeBytes)} · ${FormatUtils.formatDate(app.installDateMillis)}",
+                    text = stringResource(
+                        R.string.picker_app_meta,
+                        app.versionName,
+                        FormatUtils.formatBytes(app.totalSizeBytes),
+                        FormatUtils.formatDate(app.installDateMillis)
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(
+                onClick = onShareClick,
+                enabled = !isExtracting,
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("share_app_button_${app.packageName}")
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Share,
+                    contentDescription = stringResource(R.string.share_app_cd, app.appName),
+                    tint = PrimaryBlue
+                )
+            }
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.picker_selected_cd),
                     tint = PrimaryBlue,
                     modifier = Modifier.size(24.dp)
                 )

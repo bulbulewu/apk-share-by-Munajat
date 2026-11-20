@@ -8,13 +8,21 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.core.content.FileProvider
+import com.example.R
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
 class ApkInstaller(private val context: Context) {
+
+    private fun str(@StringRes id: Int, vararg args: Any): String {
+        val loc = LocaleHelper.localizedContext(context)
+        return if (args.isEmpty()) loc.getString(id) else loc.getString(id, *args)
+    }
 
     fun canRequestPackageInstalls(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -72,13 +80,13 @@ class ApkInstaller(private val context: Context) {
         isSplitApk: Boolean
     ) {
         if (apkFiles.isEmpty()) {
-            InstallResultBus.update(InstallState.Failed(appName, "No APK files found to install."))
+            InstallResultBus.update(InstallState.Failed(appName, str(R.string.installer_error_no_files)))
             return
         }
         val missing = apkFiles.firstOrNull { !it.exists() || it.length() <= 0L }
         if (missing != null) {
             InstallResultBus.update(
-                InstallState.Failed(appName, "File not found or empty: ${missing.name}")
+                InstallState.Failed(appName, str(R.string.installer_error_file_missing, missing.name))
             )
             return
         }
@@ -87,7 +95,7 @@ class ApkInstaller(private val context: Context) {
             InstallResultBus.update(
                 InstallState.Failed(
                     appName,
-                    "Permission required: allow Install unknown apps for APK Share."
+                    str(R.string.installer_error_permission_required)
                 )
             )
             return
@@ -103,7 +111,7 @@ class ApkInstaller(private val context: Context) {
     private fun installSingleApkWithFileProvider(apkFile: File, appName: String) {
         try {
             InstallResultBus.update(
-                InstallState.Installing(appName, "Opening Android system installer...")
+                InstallState.Installing(appName, str(R.string.installer_opening_system))
             )
             val authority = "${context.packageName}.fileprovider"
             val contentUri = FileProvider.getUriForFile(context, authority, apkFile)
@@ -120,7 +128,10 @@ class ApkInstaller(private val context: Context) {
             InstallResultBus.update(
                 InstallState.Failed(
                     appName,
-                    "Unable to launch system installer: ${t.message ?: "Unknown error"}"
+                    str(
+                        R.string.installer_error_launch_failed,
+                        t.message ?: str(R.string.installer_unknown_error)
+                    )
                 )
             )
         }
@@ -136,7 +147,7 @@ class ApkInstaller(private val context: Context) {
             InstallResultBus.update(
                 InstallState.Installing(
                     appName,
-                    "Preparing ${apkFiles.size} APK splits for system installer..."
+                    str(R.string.installer_preparing_splits, apkFiles.size)
                 )
             )
             val packageInstaller = context.packageManager.packageInstaller
@@ -157,7 +168,7 @@ class ApkInstaller(private val context: Context) {
                 InstallResultBus.update(
                     InstallState.Installing(
                         appName,
-                        "Writing split ${index + 1}/${apkFiles.size}: ${file.name}"
+                        str(R.string.installer_writing_split, index + 1, apkFiles.size, file.name)
                     )
                 )
                 val entryName = file.name.ifBlank { "split_$index.apk" }
@@ -192,7 +203,10 @@ class ApkInstaller(private val context: Context) {
             Log.e(TAG, "IO failure writing split APKs", e)
             runCatching { session?.abandon() }
             InstallResultBus.update(
-                InstallState.Failed(appName, "Failed to read/write split APKs: ${e.message}")
+                InstallState.Failed(
+                    appName,
+                    str(R.string.installer_error_io_splits, e.message ?: str(R.string.installer_unknown_error))
+                )
             )
         } catch (t: Throwable) {
             Log.e(TAG, "PackageInstaller session failed", t)
@@ -200,7 +214,10 @@ class ApkInstaller(private val context: Context) {
             InstallResultBus.update(
                 InstallState.Failed(
                     appName,
-                    "Split APK install failed: ${t.message ?: "Unknown error"}"
+                    str(
+                        R.string.installer_error_split_failed,
+                        t.message ?: str(R.string.installer_unknown_error)
+                    )
                 )
             )
         } finally {
