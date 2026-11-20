@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +65,7 @@ fun HistoryScreen(
     onDeleteItem: (Long) -> Unit,
     onClearAll: () -> Unit,
     onShareItem: (TransferHistoryEntity) -> Unit = {},
+    onOpenFileItem: (TransferHistoryEntity) -> Unit = {},
     sharingItemId: Long? = null,
     modifier: Modifier = Modifier
 ) {
@@ -170,6 +172,7 @@ fun HistoryScreen(
                         HistoryItemCard(
                             item = item,
                             isSharing = sharingItemId == item.id,
+                            onOpenFile = { onOpenFileItem(item) },
                             onShare = { onShareItem(item) },
                             onDelete = { onDeleteItem(item.id) }
                         )
@@ -184,10 +187,14 @@ fun HistoryScreen(
 private fun HistoryItemCard(
     item: TransferHistoryEntity,
     isSharing: Boolean,
+    onOpenFile: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     val isSent = item.direction == TransferDirection.SENT
+    val canOpenFile = item.isGenericFile &&
+        item.direction == TransferDirection.RECEIVED &&
+        item.status == TransferStatus.SUCCESS
     val accent = if (isSent) PrimaryBlue else SuccessGreen
     val statusColor = when (item.status) {
         TransferStatus.SUCCESS -> SuccessGreen
@@ -213,7 +220,10 @@ private fun HistoryItemCard(
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (canOpenFile) Modifier.clickable(onClick = onOpenFile) else Modifier)
+            .testTag("history_item_card_${item.id}")
     ) {
         Row(
             modifier = Modifier
@@ -229,7 +239,13 @@ private fun HistoryItemCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isSent) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward,
+                    imageVector = if (item.isGenericFile) {
+                        iconForMimeType(item.mimeType, item.appName)
+                    } else if (isSent) {
+                        Icons.Rounded.ArrowUpward
+                    } else {
+                        Icons.Rounded.ArrowDownward
+                    },
                     contentDescription = directionLabel,
                     tint = accent
                 )
@@ -275,15 +291,30 @@ private fun HistoryItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = stringResource(
-                        R.string.history_item_meta,
-                        FormatUtils.formatBytes(item.sizeBytes),
-                        item.versionName,
-                        FormatUtils.formatDateTime(item.timestampMillis)
-                    ),
+                    text = if (item.isGenericFile) {
+                        stringResource(
+                            R.string.history_file_item_meta,
+                            FormatUtils.formatBytes(item.sizeBytes),
+                            FormatUtils.formatDateTime(item.timestampMillis)
+                        )
+                    } else {
+                        stringResource(
+                            R.string.history_item_meta,
+                            FormatUtils.formatBytes(item.sizeBytes),
+                            item.versionName,
+                            FormatUtils.formatDateTime(item.timestampMillis)
+                        )
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (canOpenFile) {
+                    Text(
+                        text = stringResource(R.string.history_tap_to_open_file),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PrimaryBlue
+                    )
+                }
                 if (!item.errorReason.isNullOrBlank()) {
                     Text(
                         text = item.errorReason,
@@ -309,7 +340,11 @@ private fun HistoryItemCard(
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.Share,
-                            contentDescription = stringResource(R.string.share_app_cd, item.appName),
+                            contentDescription = if (item.isGenericFile) {
+                                stringResource(R.string.share_file_cd, item.appName)
+                            } else {
+                                stringResource(R.string.share_app_cd, item.appName)
+                            },
                             tint = PrimaryBlue
                         )
                     }

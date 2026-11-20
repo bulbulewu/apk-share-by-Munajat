@@ -35,7 +35,8 @@ import java.util.zip.ZipOutputStream
 data class ShareableApkResult(
     val file: File,
     val appName: String,
-    val isSplitBundle: Boolean
+    val isSplitBundle: Boolean,
+    val mimeType: String? = null
 )
 
 /**
@@ -135,6 +136,17 @@ object ApkShareHelper {
         storageManager: ApkStorageManager,
         apkExtractor: ApkExtractor
     ): ShareableApkResult? = withContext(Dispatchers.IO) {
+        if (item.isGenericFile) {
+            val resolvedFile = FileTransferHelper.resolveHistoryFile(context, item, storageManager)
+                ?: return@withContext null
+            return@withContext ShareableApkResult(
+                file = resolvedFile,
+                appName = item.appName,
+                isSplitBundle = false,
+                mimeType = item.mimeType ?: FileTransferHelper.guessMimeTypeFromFileName(resolvedFile.name)
+            )
+        }
+
         val safeName = FormatUtils.sanitizeFileName(item.appName)
         val safeVer = FormatUtils.sanitizeFileName(item.versionName)
         val expectedSingleName = "${safeName}_v${safeVer}.apk"
@@ -229,16 +241,20 @@ object ApkShareHelper {
         context: Context,
         file: File,
         appName: String,
-        isSplitBundle: Boolean
+        isSplitBundle: Boolean,
+        mimeType: String? = null
     ): Intent {
         val loc = LocaleHelper.localizedContext(context)
         val uri = getFileProviderUri(context, file)
-        val mimeType = mimeTypeFor(isSplitBundle)
+        val resolvedMimeType = mimeType?.takeIf { it.isNotBlank() } ?: mimeTypeFor(isSplitBundle)
 
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = mimeType
+            type = resolvedMimeType
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, loc.getString(R.string.share_subject_apk, appName))
+            putExtra(
+                Intent.EXTRA_SUBJECT,
+                if (mimeType != null) appName else loc.getString(R.string.share_subject_apk, appName)
+            )
             clipData = ClipData.newUri(context.contentResolver, file.name, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
@@ -253,7 +269,7 @@ object ApkShareHelper {
     }
 
     /**
-     * Builds the Android system share sheet chooser [Intent] for one or more APKs/bundles.
+     * Builds the Android system share sheet chooser [Intent] for one or more APKs/bundles/files.
      * - 1 item: delegates to [createShareChooserIntent] (`Intent.ACTION_SEND`) unchanged.
      * - 2+ items: uses `Intent.ACTION_SEND_MULTIPLE` with `FileProvider` URIs, multi-item
      *   [ClipData], and [Intent.FLAG_GRANT_READ_URI_PERMISSION].
@@ -262,14 +278,15 @@ object ApkShareHelper {
         context: Context,
         items: List<ShareableApkResult>
     ): Intent {
-        require(items.isNotEmpty()) { "At least one APK is required to share" }
+        require(items.isNotEmpty()) { "At least one file is required to share" }
         if (items.size == 1) {
             val single = items.first()
             return createShareChooserIntent(
                 context = context,
                 file = single.file,
                 appName = single.appName,
-                isSplitBundle = single.isSplitBundle
+                isSplitBundle = single.isSplitBundle,
+                mimeType = single.mimeType
             )
         }
 
@@ -279,12 +296,27 @@ object ApkShareHelper {
             uris.add(getFileProviderUri(context, item.file))
         }
 
-        val allSingle = items.all { !it.isSplitBundle }
-        val allSplit = items.all { it.isSplitBundle }
-        val mimeType = when {
-            allSingle -> MIME_TYPE_APK
-            allSplit -> MIME_TYPE_APKS
-            else -> "*/*"
+        val hasGenericFiles = items.any { it.mimeType != null }
+        val mimeType = if (hasGenericFiles) {
+            val mimes = items.map { it.mimeType ?: mimeTypeFor(it.isSplitBundle) }.distinct()
+            if (mimes.size == 1) {
+                mimes.first()
+            } else {
+                val topTypes = mimes.map { it.substringBefore('/') }.distinct()
+                if (topTypes.size == 1 && topTypes.first().isNotBlank() && topTypes.first() != "*") {
+                    "${topTypes.first()}/*"
+                } else {
+                    "*/*"
+                }
+            }
+        } else {
+            val allSingle = items.all { !it.isSplitBundle }
+            val allSplit = items.all { it.isSplitBundle }
+            when {
+                allSingle -> MIME_TYPE_APK
+                allSplit -> MIME_TYPE_APKS
+                else -> "*/*"
+            }
         }
 
         val combinedClipData = ClipData.newUri(context.contentResolver, items.first().file.name, uris.first()).apply {
@@ -293,15 +325,25 @@ object ApkShareHelper {
             }
         }
 
+        val subject = if (hasGenericFiles) {
+            loc.getString(R.string.share_multiple_files_subject, items.size)
+        } else {
+            loc.getString(R.string.share_multiple_subject, items.size)
+        }
+        val chooserTitle = if (hasGenericFiles) {
+            loc.getString(R.string.share_multiple_files_chooser_title, items.size)
+        } else {
+            loc.getString(R.string.share_multiple_chooser_title, items.size)
+        }
+
         val sendIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = mimeType
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            putExtra(Intent.EXTRA_SUBJECT, loc.getString(R.string.share_multiple_subject, items.size))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
             clipData = combinedClipData
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-        val chooserTitle = loc.getString(R.string.share_multiple_chooser_title, items.size)
         return Intent.createChooser(sendIntent, chooserTitle).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             if (!hasActivityContext(context)) {
@@ -317,17 +359,23 @@ object ApkShareHelper {
         if (items.isEmpty()) return false
         if (items.size == 1) {
             val single = items.first()
-            return launchShareSheet(context, single.file, single.appName, single.isSplitBundle)
+            return launchShareSheet(
+                context = context,
+                file = single.file,
+                appName = single.appName,
+                isSplitBundle = single.isSplitBundle,
+                mimeType = single.mimeType
+            )
         }
         return try {
             val chooser = createMultipleShareChooserIntent(context, items)
             context.startActivity(chooser)
             true
         } catch (anf: ActivityNotFoundException) {
-            Log.w(TAG, "No share target app available for ${items.size} APKs", anf)
+            Log.w(TAG, "No share target app available for ${items.size} items", anf)
             false
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to launch system multi-share sheet for ${items.size} APKs", t)
+            Log.e(TAG, "Failed to launch system multi-share sheet for ${items.size} items", t)
             false
         }
     }
@@ -482,10 +530,11 @@ object ApkShareHelper {
         context: Context,
         file: File,
         appName: String,
-        isSplitBundle: Boolean
+        isSplitBundle: Boolean,
+        mimeType: String? = null
     ): Boolean {
         return try {
-            val chooser = createShareChooserIntent(context, file, appName, isSplitBundle)
+            val chooser = createShareChooserIntent(context, file, appName, isSplitBundle, mimeType)
             context.startActivity(chooser)
             true
         } catch (anf: ActivityNotFoundException) {

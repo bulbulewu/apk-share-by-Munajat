@@ -17,6 +17,8 @@ import com.example.model.TransferStatus
 import com.example.service.TransferForegroundService
 import com.example.transfer.HttpApkDownloader
 import com.example.transfer.HttpDownloadState
+import com.example.transfer.InterruptedTransferRecord
+import com.example.transfer.InterruptedTransferStore
 import com.example.transfer.NearbyReceiverState
 import com.example.transfer.NearbyTransferManager
 import com.example.util.QrCodeUtils
@@ -67,8 +69,26 @@ class ReceiverViewModel(
     private var discoveryJob: Job? = null
 
     init {
+        restoreSavedInterruptedTransferIfAny()
         observeTransfersForHistory()
         observeNotificationCancellation()
+    }
+
+    private fun restoreSavedInterruptedTransferIfAny() {
+        val currentNearby = nearbyManager.receiverState.value
+        val currentHttp = httpDownloader.state.value
+        if (currentNearby !is NearbyReceiverState.Idle || currentHttp !is HttpDownloadState.Idle) {
+            return
+        }
+        val saved = nearbyManager.resumeStore.loadValid() ?: return
+        if (saved.mode == InterruptedTransferStore.MODE_HOTSPOT) {
+            _mode.value = ReceiverMode.HOTSPOT_HTTP
+            lastHotspotUrl = saved.hotspotUrl
+            httpDownloader.restoreInterruptedState(saved)
+        } else {
+            _mode.value = ReceiverMode.NEARBY
+            nearbyManager.restoreInterruptedState(saved)
+        }
     }
 
     private fun observeTransfersForHistory() {
@@ -98,7 +118,10 @@ class ReceiverViewModel(
                                     status = TransferStatus.SUCCESS,
                                     peerDeviceName = state.peerName,
                                     isSplitApk = state.metadata.isSplitApk,
-                                    durationMillis = state.durationMillis
+                                    durationMillis = state.durationMillis,
+                                    isGenericFile = state.metadata.isGenericFile,
+                                    mimeType = state.metadata.mimeType,
+                                    savedFilePath = state.savedFiles.firstOrNull()?.absolutePath
                                 )
                             )
                         }
@@ -134,7 +157,10 @@ class ReceiverViewModel(
                                     status = TransferStatus.SUCCESS,
                                     peerDeviceName = "Wi-Fi Hotspot",
                                     isSplitApk = state.metadata.isSplitApk,
-                                    durationMillis = state.durationMillis
+                                    durationMillis = state.durationMillis,
+                                    isGenericFile = state.metadata.isGenericFile,
+                                    mimeType = state.metadata.mimeType,
+                                    savedFilePath = state.savedFiles.firstOrNull()?.absolutePath
                                 )
                             )
                         }
@@ -208,6 +234,23 @@ class ReceiverViewModel(
         nearbyManager.declineIncomingOffer()
     }
 
+    fun pauseNearbyTransfer() {
+        nearbyManager.setReceiverPaused(true)
+    }
+
+    fun resumeNearbyTransfer() {
+        nearbyManager.setReceiverPaused(false)
+    }
+
+    fun cancelOngoingNearbyTransfer() {
+        discoveryJob?.cancel()
+        nearbyManager.cancelActiveTransferByReceiver()
+    }
+
+    fun retryCancelledNearbyTransfer() {
+        startNearbyDiscovery()
+    }
+
     fun switchToHotspotMode() {
         discoveryJob?.cancel()
         nearbyManager.cancelReceiver()
@@ -232,6 +275,49 @@ class ReceiverViewModel(
             val exportPublic = settingsDataStore.settings.first().exportToPublicDownloads
             httpDownloader.startDownload(url, exportPublic)
         }
+    }
+
+    fun cancelOngoingHotspotDownload() {
+        httpDownloader.cancelActiveDownload()
+    }
+
+    fun retryCancelledHotspotDownload(url: String) {
+        val target = url.ifBlank { lastHotspotUrl.orEmpty() }
+        if (target.isNotBlank()) {
+            startHttpDownload(target)
+        } else {
+            httpDownloader.reset()
+        }
+    }
+
+    fun resumeInterruptedNearbyTransfer(record: InterruptedTransferRecord) {
+        _mode.value = ReceiverMode.NEARBY
+        httpDownloader.stopPreservingPartial()
+        InstallResultBus.reset()
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            val settings = settingsDataStore.settings.first()
+            nearbyManager.startResumeDiscovery(
+                record = record,
+                localDeviceName = settings.deviceName,
+                exportToPublicDownloads = settings.exportToPublicDownloads
+            )
+        }
+    }
+
+    fun resumeInterruptedHotspotTransfer(record: InterruptedTransferRecord) {
+        val target = record.hotspotUrl?.takeIf { it.isNotBlank() } ?: lastHotspotUrl.orEmpty()
+        if (target.isNotBlank()) {
+            startHttpDownload(target)
+        }
+    }
+
+    fun clearInterruptedTransfer() {
+        discoveryJob?.cancel()
+        nearbyManager.clearInterruptedTransfer()
+        httpDownloader.clearInterruptedTransfer()
+        InstallResultBus.reset()
+        lastHotspotUrl = null
     }
 
     fun receiveNextNearbyApp() {
@@ -283,6 +369,21 @@ class ReceiverViewModel(
         return apkInstaller.launchInstalledApp(packageName)
     }
 
+    fun leavePreservingInterrupted() {
+        discoveryJob?.cancel()
+        val hasNearbyInterrupted = (nearbyState.value as? NearbyReceiverState.Error)?.interruptedRecord != null ||
+            nearbyState.value is NearbyReceiverState.Downloading
+        val hasHttpInterrupted = (httpDownloadState.value as? HttpDownloadState.Error)?.interruptedRecord != null ||
+            httpDownloadState.value is HttpDownloadState.Downloading
+        if (hasNearbyInterrupted || hasHttpInterrupted) {
+            nearbyManager.stopPreservingPartial()
+            httpDownloader.stopPreservingPartial()
+            InstallResultBus.reset()
+        } else {
+            cancelAll()
+        }
+    }
+
     fun cancelAll() {
         discoveryJob?.cancel()
         nearbyManager.cancelReceiver()
@@ -294,8 +395,8 @@ class ReceiverViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        nearbyManager.stopAll()
-        httpDownloader.cancel()
+        nearbyManager.stopPreservingPartial()
+        httpDownloader.stopPreservingPartial()
     }
 
     class Factory(

@@ -456,4 +456,92 @@
     <string name="receiver_receive_next_app">Receive Next App</string>
     <string name="receiver_received_batch_title">Received Apps (%1$d)</string>
     <string name="receiver_install_short">Install</string>
+
+    <!-- File Sending (Photos, Videos, Music, Documents, Any File) -->
+    <string name="picker_tab_apps">Apps</string>
+    <string name="picker_tab_files">Files</string>
+    <string name="picker_files_note">Send photos, videos, music, PDFs, or any file offline with original quality</string>
+    <string name="picker_pick_files_button">Pick Files</string>
+    <string name="picker_add_more_files">Add More Files</string>
+    <string name="picker_files_empty_title">No files selected</string>
+    <string name="picker_files_empty_body">Tap Pick Files to choose photos, videos, music, documents, ZIP archives, or any other file.</string>
+    <string name="picker_remove_file_cd">Remove %1$s</string>
+    <string name="picker_one_file_selected">1 file selected</string>
+    <string name="picker_files_selected_count">%1$d files selected</string>
+    <string name="picker_preparing_file">Preparing…</string>
+    <string name="save_files_success_multiple">Saved %1$d files to Downloads/APK Share</string>
+    <string name="save_files_partial">Saved %1$d of %2$d files to Downloads/APK Share</string>
+    <string name="save_files_failed">Could not save file to Downloads.</string>
+    <string name="share_file_cd">Share %1$s</string>
+    <string name="share_multiple_files_chooser_title">Share %1$d files via…</string>
+    <string name="share_multiple_files_subject">%1$d files</string>
+    <string name="batch_summary_files_sent_count">%1$d of %2$d files sent</string>
+    <string name="batch_summary_files_all_failed">Could not send the selected files.</string>
+    <string name="batch_summary_failed_files_header">Failed files:</string>
+    <string name="batch_hotspot_next_file">Next File (%1$d/%2$d)</string>
+    <string name="batch_hotspot_skip_file">Skip File</string>
+    <string name="sender_file_label">Original file</string>
+    <string name="receiver_open_file_button">Open File</string>
+    <string name="receiver_open_short">Open</string>
+    <string name="receiver_receive_next_file">Receive Next File</string>
+    <string name="receiver_received_files_batch_title">Received Items (%1$d)</string>
+    <string name="receiver_no_viewer_toast">No app found on this phone to open this file.</string>
+    <string name="receiver_file_missing_toast">File is no longer available on this device.</string>
+    <string name="receiver_incoming_file_title">Incoming File</string>
+    <string name="receiver_file_complete_meta">%1$s • %2$s</string>
+    <string name="history_file_item_meta">File • %1$s • %2$s</string>
+    <string name="history_tap_to_open_file">Tap to open</string>
+    <string name="error_cannot_read_file">Cannot read file: %1$s</string>
+    <string name="error_not_enough_storage_file">Not enough free storage to prepare %1$s (need %2$s).</string>
+
+    <!-- Live Transfer Speed, ETA, Pause/Resume & Cancel -->
+    <string name="transfer_amount_of_total">%1$s of %2$s · %3$d%%</string>
+    <string name="transfer_eta_left">%1$s left</string>
+    <string name="transfer_action_pause">Pause</string>
+    <string name="transfer_action_resume">Resume</string>
+    <string name="transfer_status_paused">Paused</string>
+    <string name="transfer_paused_finishing_current">Paused — finishing current file before pausing queue</string>
+    <string name="transfer_paused_waiting_queue">Paused — %1$d of %2$d completed. Tap Resume to send %3$s.</string>
+    <string name="transfer_paused_waiting_next_file">Paused — tap Resume to continue remaining files</string>
+    <string name="transfer_cancelled_title">Transfer cancelled</string>
+    <string name="transfer_cancelled_subtitle">The transfer was stopped cleanly and no incomplete files were saved.</string>
+    <string name="transfer_try_again">Try again</string>
+
+    <!-- Resume Interrupted Transfers -->
+    <string name="transfer_interrupted_progress">Transfer Interrupted — %1$s of %2$s received</string>
+    <string name="transfer_action_clear_partial">Clear</string>
+    <string name="transfer_resume_button">Resume</string>
+    <string name="transfer_resume_reconnecting">Reconnecting to %1$s to resume from %2$s…</string>
+    <string name="transfer_resume_server_no_range">Sender doesn\'t support resume — restarting from zero.</string>
+    <string name="transfer_resume_file_changed_restart">File changed or partial copy invalid — restarting from zero.</string>
+    <string name="transfer_resume_restored_reason">An incomplete transfer for %1$s is saved on this device. Tap Resume to continue from where it stopped.</string>
+    <string name="transfer_resume_cleared_toast">Incomplete transfer cleared</string>
+
+    <!-- Share to PC Mode -->
+    <string name="picker_share_to_pc">Share to PC</string>
+    <string name="picker_share_to_pc_cd">Share selected items to a PC over Wi-Fi hotspot</string>
+    <string name="picker_cross_tab_pc_note">+ %1$d queued in the other tab (included in Share to PC)</string>
+    <string name="pc_share_title">Share to PC</string>
+    <string name="pc_share_subtitle">Download selected apps &amp; files on your Windows PC browser with no USB cable</string>
+    <string name="pc_share_step_1_with_ssid">1. On your PC, connect Wi-Fi to: %1$s</string>
+    <string name="pc_share_step_1_starting">1. On your PC, connect Wi-Fi to: This phone\'s hotspot</string>
+    <string name="pc_share_step_2">2. Open this address in the PC browser:</string>
+    <string name="pc_share_step_3">3. Click a file on the page to download it</string>
+    <string name="pc_share_items_ready_count">%1$d items ready to download (%2$s total)</string>
+    <string name="pc_share_items_ready_single">1 item ready to download (%1$s)</string>
+    <string name="pc_share_copy_password_cd">Copy hotspot password</string>
+    <string name="pc_share_password_copied_toast">Hotspot password copied</string>
+    <string name="pc_share_status_header">Live Download Status</string>
+    <string name="pc_share_status_downloading">Downloading: %1$s</string>
+    <string name="pc_share_status_last_file">Last downloaded: %1$s</string>
+    <string name="pc_share_status_waiting">Waiting for your PC browser to click a download link…</string>
+    <string name="pc_share_bytes_served">Served: %1$s</string>
+    <string name="pc_share_speed_label">Speed: %1$s</string>
+    <string name="pc_share_stop_button">Stop sharing</string>
+    <string name="pc_share_safety_note">Local hotspot only — anyone connected to this Wi-Fi can download these files. Stop sharing when you are done.</string>
+    <string name="pc_share_web_page_subtitle">Click any file below to download it to your PC.</string>
+    <string name="pc_share_web_download">Download</string>
+    <string name="pc_share_error_none_staged">Could not prepare selected apps or files for PC download.</string>
+    <string name="pc_share_split_apk_label">v%1$s • Split APK (.apks)</string>
+    <string name="pc_share_single_apk_label">v%1$s • APK</string>
 </resources>

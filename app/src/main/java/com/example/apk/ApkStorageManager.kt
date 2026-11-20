@@ -8,6 +8,7 @@ import android.os.StatFs
 import android.provider.MediaStore
 import android.util.Log
 import com.example.R
+import com.example.util.FileTransferHelper
 import com.example.util.FormatUtils
 import com.example.util.LocaleHelper
 import kotlinx.coroutines.Dispatchers
@@ -42,12 +43,20 @@ class ApkStorageManager(private val context: Context) {
         }
     }
 
-    fun createDestinationDir(appName: String, versionName: String, isSplitApk: Boolean): File {
+    fun createDestinationDir(
+        appName: String,
+        versionName: String,
+        isSplitApk: Boolean,
+        preserveExisting: Boolean = false
+    ): File {
         val root = getAppDownloadsRoot()
         return if (isSplitApk) {
             val folderName = "${FormatUtils.sanitizeFileName(appName)}_v${FormatUtils.sanitizeFileName(versionName)}"
             File(root, folderName).apply {
-                if (exists()) deleteRecursively()
+                val hasPartialFiles = exists() && (listFiles()?.any { it.name.endsWith(".part") } == true)
+                if (exists() && !preserveExisting && !hasPartialFiles) {
+                    deleteRecursively()
+                }
                 mkdirs()
             }
         } else {
@@ -60,7 +69,8 @@ class ApkStorageManager(private val context: Context) {
         appName: String,
         versionName: String,
         isSplitApk: Boolean,
-        enabled: Boolean
+        enabled: Boolean,
+        mimeType: String? = null
     ): String = withContext(Dispatchers.IO) {
         val subFolder = if (isSplitApk) {
             "APK Share/${FormatUtils.sanitizeFileName(appName)}_v${FormatUtils.sanitizeFileName(versionName)}"
@@ -71,6 +81,20 @@ class ApkStorageManager(private val context: Context) {
 
         if (!enabled) {
             return@withContext files.firstOrNull()?.parentFile?.absolutePath ?: displayPath
+        }
+
+        if (mimeType != null && !isSplitApk) {
+            for (file in files) {
+                FileTransferHelper.saveGenericFileToPublicDownloads(
+                    context = context,
+                    sourceFile = file,
+                    displayName = file.name,
+                    mimeType = mimeType
+                ).onFailure { t ->
+                    Log.w(TAG, "Could not mirror ${file.name} to public Downloads: ${t.message}")
+                }
+            }
+            return@withContext displayPath
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

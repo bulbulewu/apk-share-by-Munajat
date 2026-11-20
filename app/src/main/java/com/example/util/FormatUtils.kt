@@ -13,6 +13,10 @@ import java.util.Locale
 
 object FormatUtils {
 
+    const val UNKNOWN_METRIC = "—"
+    const val SPEED_WINDOW_MILLIS = 2_000L
+    const val LIVE_STATS_UPDATE_INTERVAL_MILLIS = 500L
+
     fun formatBytes(bytes: Long): String {
         if (bytes <= 0L) return "0 B"
         val kb = 1024.0
@@ -26,29 +30,119 @@ object FormatUtils {
         }
     }
 
-    fun formatSpeed(bytesPerSec: Long): String {
-        if (bytesPerSec <= 0L) return "0.0 MB/s"
-        val mbPerSec = bytesPerSec.toDouble() / (1024.0 * 1024.0)
-        return if (mbPerSec >= 0.1) {
-            String.format(Locale.US, "%.1f MB/s", mbPerSec)
+    /**
+     * Formats transfer amounts as MB with 1 decimal (e.g. "45.2 MB"), or KB with 1 decimal
+     * when under 1 MB (e.g. "512.0 KB").
+     */
+    fun formatTransferSize(bytes: Long): String {
+        val safe = bytes.coerceAtLeast(0L)
+        val kb = 1024.0
+        val mb = kb * 1024.0
+        return if (safe >= mb) {
+            String.format(Locale.US, "%.1f MB", safe / mb)
         } else {
-            val kbPerSec = bytesPerSec.toDouble() / 1024.0
-            String.format(Locale.US, "%.0f KB/s", kbPerSec)
+            String.format(Locale.US, "%.1f KB", safe / kb)
         }
     }
 
+    /**
+     * Formats live transfer speed in MB/s with 1 decimal (e.g. "4.2 MB/s"),
+     * returning "—" when speed is 0 or unknown.
+     */
+    fun formatLiveSpeed(bytesPerSec: Long): String {
+        if (bytesPerSec <= 0L) return UNKNOWN_METRIC
+        val mbPerSec = bytesPerSec.toDouble() / (1024.0 * 1024.0)
+        return String.format(Locale.US, "%.1f MB/s", mbPerSec)
+    }
+
+    /**
+     * Computes estimated seconds remaining given remaining bytes and current speed.
+     * Returns -1L when speed is 0 or unknown.
+     */
+    fun computeEtaSeconds(remainingBytes: Long, speedBytesPerSec: Long): Long {
+        if (speedBytesPerSec <= 0L) return -1L
+        val safeRemaining = remainingBytes.coerceAtLeast(0L)
+        if (safeRemaining == 0L) return 0L
+        return (safeRemaining / speedBytesPerSec).coerceAtLeast(1L)
+    }
+
+    /**
+     * Formats estimated time remaining as mm:ss (e.g. "01:25"), or null when unknown.
+     */
+    fun formatEtaClock(etaSeconds: Long): String? {
+        if (etaSeconds < 0L) return null
+        val mins = etaSeconds / 60L
+        val secs = etaSeconds % 60L
+        return String.format(Locale.US, "%02d:%02d", mins, secs)
+    }
+
+    fun formatSpeed(bytesPerSec: Long): String {
+        return formatLiveSpeed(bytesPerSec)
+    }
+
     fun formatEta(seconds: Long): String {
-        if (seconds <= 0L) return "Calculating..."
-        val mins = seconds / 60L
-        val secs = seconds % 60L
-        return when {
-            mins >= 60L -> {
-                val hrs = mins / 60L
-                val remMins = mins % 60L
-                "${hrs}h ${remMins}m"
+        return formatEtaClock(seconds) ?: UNKNOWN_METRIC
+    }
+
+    /**
+     * Computes live transfer speed (bytes/sec) from bytes transferred over a rolling time window
+     * (default 2 seconds) without any extra network calls.
+     */
+    class RollingTransferSpeedTracker(
+        private val windowMillis: Long = SPEED_WINDOW_MILLIS
+    ) {
+        private val samples = ArrayDeque<Pair<Long, Long>>()
+
+        @Synchronized
+        fun reset(nowMillis: Long = System.currentTimeMillis(), initialBytes: Long = 0L) {
+            samples.clear()
+            samples.addLast(nowMillis to initialBytes.coerceAtLeast(0L))
+        }
+
+        @Synchronized
+        fun record(cumulativeBytes: Long, nowMillis: Long = System.currentTimeMillis()): Long {
+            val safeBytes = cumulativeBytes.coerceAtLeast(0L)
+            if (samples.isEmpty()) {
+                samples.addLast(nowMillis to safeBytes)
+                return 0L
             }
-            mins > 0L -> "${mins}m ${secs}s"
-            else -> "${secs}s"
+            val last = samples.last()
+            if (nowMillis < last.first) {
+                return computeCurrentSpeedLocked(nowMillis)
+            }
+            if (nowMillis == last.first) {
+                samples.removeLast()
+                samples.addLast(nowMillis to maxOf(last.second, safeBytes))
+            } else {
+                samples.addLast(nowMillis to maxOf(last.second, safeBytes))
+            }
+
+            val cutoff = nowMillis - windowMillis
+            while (samples.size >= 2 && samples[1].first <= cutoff) {
+                samples.removeFirst()
+            }
+            return computeCurrentSpeedLocked(nowMillis)
+        }
+
+        @Synchronized
+        fun currentSpeed(nowMillis: Long = System.currentTimeMillis()): Long {
+            if (samples.size < 2) return 0L
+            val last = samples.last()
+            if (nowMillis - last.first > windowMillis) {
+                return 0L
+            }
+            return computeCurrentSpeedLocked(nowMillis)
+        }
+
+        private fun computeCurrentSpeedLocked(nowMillis: Long): Long {
+            if (samples.size < 2) return 0L
+            val oldest = samples.first()
+            val newest = samples.last()
+            val deltaBytes = (newest.second - oldest.second).coerceAtLeast(0L)
+            val deltaMs = (newest.first - oldest.first)
+            if (deltaBytes <= 0L || deltaMs <= 0L) return 0L
+            if (nowMillis - newest.first > windowMillis) return 0L
+            return (deltaBytes * 1000L) / deltaMs
         }
     }
 

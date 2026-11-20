@@ -69,12 +69,14 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ReceiverScreen
 import com.example.ui.screens.SenderTransferScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.ShareToPcScreen
 import com.example.ui.theme.ApkShareTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.ReceiverViewModel
 import com.example.ui.viewmodel.SenderViewModel
 import com.example.util.ApkShareHelper
 import com.example.util.BiometricHelper
+import com.example.util.FileTransferHelper
 import com.example.util.LocaleHelper
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -93,6 +95,9 @@ object AppPickerRoute
 
 @Serializable
 object SenderTransferRoute
+
+@Serializable
+object ShareToPcRoute
 
 @Serializable
 object ReceiverRoute
@@ -244,7 +249,8 @@ class MainActivity : FragmentActivity() {
                                                     context = localizedContext,
                                                     file = resolved.file,
                                                     appName = resolved.appName,
-                                                    isSplitBundle = resolved.isSplitBundle
+                                                    isSplitBundle = resolved.isSplitBundle,
+                                                    mimeType = resolved.mimeType
                                                 )
                                                 if (!launched) {
                                                     Toast.makeText(
@@ -256,6 +262,33 @@ class MainActivity : FragmentActivity() {
                                             }
                                         } finally {
                                             sharingHistoryItemId = null
+                                        }
+                                    }
+                                },
+                                onOpenHistoryFileItem = { item ->
+                                    val file = FileTransferHelper.resolveHistoryFile(
+                                        context = localizedContext,
+                                        item = item,
+                                        storageManager = container.apkStorageManager
+                                    )
+                                    if (file == null) {
+                                        Toast.makeText(
+                                            localizedContext,
+                                            localizedContext.getString(R.string.receiver_file_missing_toast),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        val opened = FileTransferHelper.openFileWithSystemViewer(
+                                            context = localizedContext,
+                                            file = file,
+                                            mimeType = item.mimeType
+                                        )
+                                        if (!opened) {
+                                            Toast.makeText(
+                                                localizedContext,
+                                                localizedContext.getString(R.string.receiver_no_viewer_toast),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 },
@@ -336,6 +369,7 @@ private fun ApkShareNavHost(
     updateDownloadState: com.example.update.UpdateDownloadState,
     sharingHistoryItemId: Long?,
     onShareHistoryItem: (com.example.data.db.TransferHistoryEntity) -> Unit,
+    onOpenHistoryFileItem: (com.example.data.db.TransferHistoryEntity) -> Unit,
     onLanguageSelected: (String) -> Unit
 ) {
     val navController = rememberNavController()
@@ -477,6 +511,7 @@ private fun ApkShareNavHost(
                             onDeleteItem = { mainViewModel.deleteHistoryItem(it) },
                             onClearAll = { mainViewModel.clearHistory() },
                             onShareItem = onShareHistoryItem,
+                            onOpenFileItem = onOpenHistoryFileItem,
                             sharingItemId = sharingHistoryItemId
                         )
                     }
@@ -505,7 +540,8 @@ private fun ApkShareNavHost(
                         AppPickerScreen(
                             viewModel = senderViewModel,
                             onBack = { navController.popBackStack() },
-                            onProceedToTransfer = { navController.navigate(SenderTransferRoute) }
+                            onProceedToTransfer = { navController.navigate(SenderTransferRoute) },
+                            onProceedToPcShare = { navController.navigate(ShareToPcRoute) }
                         )
                     }
 
@@ -514,6 +550,15 @@ private fun ApkShareNavHost(
                             viewModel = senderViewModel,
                             onDone = {
                                 navController.popBackStack(HomeRoute, inclusive = false)
+                            }
+                        )
+                    }
+
+                    composable<ShareToPcRoute> {
+                        ShareToPcScreen(
+                            viewModel = senderViewModel,
+                            onDone = {
+                                navController.popBackStack()
                             }
                         )
                     }

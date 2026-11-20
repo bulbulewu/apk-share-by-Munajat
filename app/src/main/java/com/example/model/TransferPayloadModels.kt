@@ -18,20 +18,32 @@ data class ApkBundleMetadata(
     val totalSizeBytes: Long,
     val isSplitApk: Boolean,
     val files: List<ApkFileEntry>,
-    val iconBase64: String? = null
+    val iconBase64: String? = null,
+    val isGenericFile: Boolean = false,
+    val mimeType: String? = null
+)
+
+@Serializable
+data class ResumeFileOffset(
+    val fileName: String,
+    val receivedBytes: Long,
+    val totalSizeBytes: Long
 )
 
 @Serializable
 data class NearbyFileMapping(
     val payloadId: Long,
     val fileName: String,
-    val fileSize: Long
+    val fileSize: Long,
+    val offsetBytes: Long = 0L,
+    val restartedFromZero: Boolean = false
 )
 
 @Serializable
 data class NearbyWireEnvelope(
-    val kind: String, // "METADATA" | "FILE_MAP" | "DECLINE" | "CANCEL"
+    val kind: String, // "METADATA" | "FILE_MAP" | "ACCEPT" | "DECLINE" | "PAUSE" | "RESUME" | "CANCEL"
     val metadata: ApkBundleMetadata? = null,
     val fileMapping: NearbyFileMapping? = null,
-    val reason: String? = null
+    val reason: String? = null,
+    val resumeOffsets: List<ResumeFileOffset>? = null
 )

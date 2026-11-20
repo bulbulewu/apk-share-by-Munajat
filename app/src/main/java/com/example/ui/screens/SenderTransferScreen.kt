@@ -29,6 +29,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PauseCircle
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.WifiTethering
@@ -81,9 +84,11 @@ import com.example.ui.components.ConnectivityRequiredCard
 import com.example.ui.components.ConnectivityRequiredDialog
 import com.example.ui.components.PermissionRationaleCard
 import com.example.ui.components.PulseRadarAnimation
+import com.example.ui.components.TransferCancelledView
 import com.example.ui.components.TransferProgressBar
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.theme.WarningAmber
 import com.example.ui.viewmodel.BatchTransferQueueState
 import com.example.ui.viewmodel.ExtractionUiState
 import com.example.ui.viewmodel.SenderViewModel
@@ -104,6 +109,7 @@ fun SenderTransferScreen(
     val hotspotInfo by viewModel.hotspotInfo.collectAsStateWithLifecycle()
     val serverStatus by viewModel.httpServerStatus.collectAsStateWithLifecycle()
     val batchQueue by viewModel.batchQueue.collectAsStateWithLifecycle()
+    val isTransferPaused by viewModel.isTransferPaused.collectAsStateWithLifecycle()
 
     val nearbyPermissions = remember { PermissionHelper.getNearbyTransferPermissions() }
     val hotspotPermissions = remember { PermissionHelper.getHotspotPermissions() }
@@ -156,8 +162,16 @@ fun SenderTransferScreen(
         }
     }
 
-    LaunchedEffect(hotspotModeActive, missingNearbyPerms, connectivity, extractionState, batchQueue.isFinished) {
-        if (!hotspotModeActive && !batchQueue.isFinished) {
+    LaunchedEffect(
+        hotspotModeActive,
+        missingNearbyPerms,
+        connectivity,
+        extractionState,
+        batchQueue.isFinished,
+        batchQueue.isPaused,
+        batchQueue.isCancelled
+    ) {
+        if (!hotspotModeActive && !batchQueue.isFinished && !batchQueue.isPaused && !batchQueue.isCancelled) {
             hotspotStarted = false
             when {
                 missingNearbyPerms.isNotEmpty() -> {
@@ -280,10 +294,22 @@ fun SenderTransferScreen(
                                 R.string.batch_preparing_next,
                                 batchQueue.currentNumber,
                                 batchQueue.totalCount,
-                                batchQueue.currentApp?.appName.orEmpty()
+                                batchQueue.currentDisplayName
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center
+                        )
+                    } else if (!hotspotModeActive &&
+                        batchQueue.isBatch &&
+                        batchQueue.isPaused &&
+                        !batchQueue.isCancelled &&
+                        nearbyState !is NearbySenderState.Sending &&
+                        nearbyState !is NearbySenderState.Cancelled
+                    ) {
+                        SenderBatchPausedView(
+                            batchQueue = batchQueue,
+                            onResume = { viewModel.resumeNearbyTransfer() },
+                            onCancel = { viewModel.cancelOngoingNearbyTransfer() }
                         )
                     } else if (hotspotModeActive) {
                         if (missingHotspotPerms.isNotEmpty()) {
@@ -492,7 +518,12 @@ fun SenderTransferScreen(
                                     onClick = { viewModel.skipCurrentBatchItem() },
                                     modifier = Modifier.testTag("nearby_skip_app_button")
                                 ) {
-                                    Text(stringResource(R.string.batch_hotspot_skip_app))
+                                    Text(
+                                        stringResource(
+                                            if (batchQueue.isFileBatch) R.string.batch_hotspot_skip_file
+                                            else R.string.batch_hotspot_skip_app
+                                        )
+                                    )
                                 }
                             }
                             TextButton(
@@ -574,22 +605,74 @@ fun SenderTransferScreen(
                         }
 
                         is NearbySenderState.Sending -> {
+                            val paused = state.isPaused || isTransferPaused
+                            val pausedDetail = when {
+                                !paused -> null
+                                state.isWaitingWhilePaused -> stringResource(R.string.transfer_paused_waiting_next_file)
+                                else -> stringResource(R.string.transfer_paused_finishing_current)
+                            }
                             BundleSummaryCard(state.bundle)
                             CircularTransferProgress(
                                 progress = state.progress,
                                 accentColor = PrimaryBlue,
                                 title = stringResource(R.string.sender_sending_to, state.peerName),
                                 subtitle = stringResource(R.string.sender_keep_phones_close),
-                                directionLabel = stringResource(R.string.progress_direction_sent)
+                                directionLabel = stringResource(R.string.progress_direction_sent),
+                                isPaused = paused,
+                                pausedDetail = pausedDetail
                             )
-                            OutlinedButton(
-                                onClick = handleBack,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("cancel_sending_button")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(stringResource(R.string.sender_cancel_transfer), color = MaterialTheme.colorScheme.error)
+                                if (paused) {
+                                    Button(
+                                        onClick = { viewModel.resumeNearbyTransfer() },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .testTag("pause_resume_sender_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = stringResource(R.string.transfer_action_resume),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { viewModel.pauseNearbyTransfer() },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .testTag("pause_resume_sender_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Pause,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.transfer_action_pause))
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.cancelOngoingNearbyTransfer() },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .testTag("cancel_sending_button")
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_cancel),
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
 
@@ -635,11 +718,15 @@ fun SenderTransferScreen(
                                 ) {
                                     DetailRow(
                                         stringResource(R.string.sender_detail_app),
-                                        stringResource(
-                                            R.string.sender_detail_app_value,
-                                            state.bundle.appName,
-                                            state.bundle.versionName
-                                        )
+                                        if (state.bundle.isGenericFile) {
+                                            state.bundle.appName
+                                        } else {
+                                            stringResource(
+                                                R.string.sender_detail_app_value,
+                                                state.bundle.appName,
+                                                state.bundle.versionName
+                                            )
+                                        }
                                     )
                                     DetailRow(
                                         stringResource(R.string.sender_detail_total_size),
@@ -651,10 +738,14 @@ fun SenderTransferScreen(
                                     )
                                     DetailRow(
                                         stringResource(R.string.sender_detail_package_type),
-                                        if (state.bundle.isSplitApk) {
-                                            stringResource(R.string.label_split_apk_bundle, state.bundle.files.size)
-                                        } else {
-                                            stringResource(R.string.label_single_apk)
+                                        when {
+                                            state.bundle.isGenericFile -> state.bundle.mimeType
+                                                ?: stringResource(R.string.sender_file_label)
+                                            state.bundle.isSplitApk -> stringResource(
+                                                R.string.label_split_apk_bundle,
+                                                state.bundle.files.size
+                                            )
+                                            else -> stringResource(R.string.label_single_apk)
                                         }
                                     )
                                 }
@@ -668,6 +759,41 @@ fun SenderTransferScreen(
                             ) {
                                 Text(stringResource(R.string.action_done), fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        is NearbySenderState.Cancelled -> {
+                            TransferCancelledView(
+                                accentColor = PrimaryBlue,
+                                onTryAgain = {
+                                    missingNearbyPerms = PermissionHelper.missingPermissions(context, nearbyPermissions)
+                                    connectivity = PermissionHelper.checkConnectivity(context)
+                                    when {
+                                        missingNearbyPerms.isNotEmpty() -> {
+                                            nearbyPermissionLauncher.launch(missingNearbyPerms.toTypedArray())
+                                        }
+                                        !connectivity.isReadyForNearby -> {
+                                            showConnectivityDialog = true
+                                        }
+                                        else -> {
+                                            viewModel.retryCancelledNearbyTransfer()
+                                        }
+                                    }
+                                },
+                                onDone = handleBack,
+                                secondaryAction = {
+                                    OutlinedButton(
+                                        onClick = { viewModel.switchToHotspotFallback() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                            .testTag("fallback_hotspot_cancelled_button")
+                                    ) {
+                                        Icon(Icons.Rounded.WifiTethering, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(stringResource(R.string.sender_try_hotspot_mode))
+                                    }
+                                }
+                            )
                         }
 
                         is NearbySenderState.Error -> {
@@ -751,9 +877,17 @@ private fun HotspotSenderView(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
-    val endpointPath = if (bundle.isSplitApk) "manifest.json" else "app.apk"
+    val endpointPath = when {
+        bundle.isGenericFile -> "manifest.json"
+        bundle.isSplitApk -> "manifest.json"
+        else -> "app.apk"
+    }
     val fullUrl = "http://${hotspotInfo.ipAddress}:${serverStatus.port}/$endpointPath"
-    val displayApkUrl = "http://${hotspotInfo.ipAddress}:${serverStatus.port}/app.apk"
+    val displayApkUrl = if (bundle.isGenericFile) {
+        "http://${hotspotInfo.ipAddress}:${serverStatus.port}/file"
+    } else {
+        "http://${hotspotInfo.ipAddress}:${serverStatus.port}/app.apk"
+    }
     val qrBitmap = remember(fullUrl) { QrCodeUtils.generateQrBitmap(fullUrl, 520) }
 
     BundleSummaryCard(bundle)
@@ -935,7 +1069,8 @@ private fun HotspotSenderView(
             Text(
                 text = if (hasMoreInBatch) {
                     stringResource(
-                        R.string.batch_hotspot_next_app,
+                        if (batchQueue.isFileBatch) R.string.batch_hotspot_next_file
+                        else R.string.batch_hotspot_next_app,
                         batchQueue.currentNumber + 1,
                         batchQueue.totalCount
                     )
@@ -950,7 +1085,12 @@ private fun HotspotSenderView(
             onClick = onSkipBatchItem,
             modifier = Modifier.testTag("hotspot_skip_app_button")
         ) {
-            Text(stringResource(R.string.batch_hotspot_skip_app))
+            Text(
+                stringResource(
+                    if (batchQueue.isFileBatch) R.string.batch_hotspot_skip_file
+                    else R.string.batch_hotspot_skip_app
+                )
+            )
         }
     }
 }
@@ -970,14 +1110,14 @@ private fun BatchQueueProgressBanner(batchQueue: BatchTransferQueueState) {
                     R.string.batch_preparing_next,
                     batchQueue.currentNumber,
                     batchQueue.totalCount,
-                    batchQueue.currentApp?.appName.orEmpty()
+                    batchQueue.currentDisplayName
                 )
             } else {
                 stringResource(
                     R.string.batch_sending_progress,
                     batchQueue.currentNumber,
                     batchQueue.totalCount,
-                    batchQueue.currentApp?.appName.orEmpty()
+                    batchQueue.currentDisplayName
                 )
             },
             style = MaterialTheme.typography.titleSmall,
@@ -990,6 +1130,86 @@ private fun BatchQueueProgressBanner(batchQueue: BatchTransferQueueState) {
 }
 
 @Composable
+private fun SenderBatchPausedView(
+    batchQueue: BatchTransferQueueState,
+    onResume: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("sender_batch_paused_view"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .clip(CircleShape)
+                .background(WarningAmber.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PauseCircle,
+                contentDescription = stringResource(R.string.transfer_status_paused),
+                tint = WarningAmber,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+        Text(
+            text = stringResource(R.string.transfer_status_paused),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = WarningAmber,
+            modifier = Modifier.testTag("sender_paused_title")
+        )
+        Text(
+            text = stringResource(
+                R.string.transfer_paused_waiting_queue,
+                batchQueue.results.size,
+                batchQueue.totalCount,
+                batchQueue.currentDisplayName
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onResume,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .testTag("resume_transfer_button")
+            ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.transfer_action_resume),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .testTag("cancel_sending_button")
+            ) {
+                Text(
+                    text = stringResource(R.string.action_cancel),
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BatchTransferSummaryView(
     batchQueue: BatchTransferQueueState,
     onDone: () -> Unit
@@ -998,6 +1218,7 @@ private fun BatchTransferSummaryView(
     val totalCount = batchQueue.totalCount
     val failedItems = batchQueue.failedItems
     val anySucceeded = sentCount > 0
+    val isFileBatch = batchQueue.isFileBatch
 
     Spacer(modifier = Modifier.height(16.dp))
     Box(
@@ -1030,9 +1251,15 @@ private fun BatchTransferSummaryView(
 
     Text(
         text = if (anySucceeded) {
-            stringResource(R.string.batch_summary_sent_count, sentCount, totalCount)
+            stringResource(
+                if (isFileBatch) R.string.batch_summary_files_sent_count else R.string.batch_summary_sent_count,
+                sentCount,
+                totalCount
+            )
         } else {
-            stringResource(R.string.batch_summary_all_failed)
+            stringResource(
+                if (isFileBatch) R.string.batch_summary_files_all_failed else R.string.batch_summary_all_failed
+            )
         },
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center
@@ -1053,7 +1280,10 @@ private fun BatchTransferSummaryView(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.batch_summary_failed_header),
+                    text = stringResource(
+                        if (isFileBatch) R.string.batch_summary_failed_files_header
+                        else R.string.batch_summary_failed_header
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
@@ -1101,7 +1331,24 @@ private fun BundleSummaryCard(bundle: ExtractedApkBundle) {
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Base64AppIcon(iconBase64 = bundle.iconBase64, size = 48.dp)
+            if (bundle.isGenericFile) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PrimaryBlue.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = iconForMimeType(bundle.mimeType, bundle.appName),
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            } else {
+                Base64AppIcon(iconBase64 = bundle.iconBase64, size = 48.dp)
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -1110,19 +1357,23 @@ private fun BundleSummaryCard(bundle: ExtractedApkBundle) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = stringResource(
-                        R.string.sender_bundle_meta,
-                        bundle.versionName,
+                    text = if (bundle.isGenericFile) {
                         FormatUtils.formatBytes(bundle.totalSizeBytes)
-                    ),
+                    } else {
+                        stringResource(
+                            R.string.sender_bundle_meta,
+                            bundle.versionName,
+                            FormatUtils.formatBytes(bundle.totalSizeBytes)
+                        )
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = if (bundle.isSplitApk) {
-                        stringResource(R.string.label_split_apk_bundle, bundle.files.size)
-                    } else {
-                        bundle.files.firstOrNull()?.name.orEmpty()
+                    text = when {
+                        bundle.isGenericFile -> bundle.mimeType ?: stringResource(R.string.sender_file_label)
+                        bundle.isSplitApk -> stringResource(R.string.label_split_apk_bundle, bundle.files.size)
+                        else -> bundle.files.firstOrNull()?.name.orEmpty()
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = PrimaryBlue

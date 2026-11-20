@@ -33,7 +33,9 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.InstallMobile
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Refresh
@@ -79,6 +81,7 @@ import com.example.R
 import com.example.installer.InstallState
 import com.example.model.ApkBundleMetadata
 import com.example.transfer.HttpDownloadState
+import com.example.transfer.InterruptedTransferRecord
 import com.example.transfer.NearbyReceiverState
 import com.example.ui.components.Base64AppIcon
 import com.example.ui.components.CircularTransferProgress
@@ -87,12 +90,14 @@ import com.example.ui.components.ConnectivityRequiredDialog
 import com.example.ui.components.PermissionRationaleCard
 import com.example.ui.components.PulseRadarAnimation
 import com.example.ui.components.QrCodeScannerView
+import com.example.ui.components.TransferCancelledView
 import com.example.ui.components.UnknownSourcesPermissionCard
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.viewmodel.ReceivedAppItem
 import com.example.ui.viewmodel.ReceiverMode
 import com.example.ui.viewmodel.ReceiverViewModel
+import com.example.util.FileTransferHelper
 import com.example.util.FormatUtils
 import com.example.util.PermissionHelper
 import java.io.File
@@ -155,7 +160,8 @@ fun ReceiverScreen(
         }
     }
 
-    LaunchedEffect(mode, missingPerms, connectivity) {
+    val isNearbyIdle = nearbyState is NearbyReceiverState.Idle
+    LaunchedEffect(mode, missingPerms, connectivity, isNearbyIdle) {
         if (mode == ReceiverMode.NEARBY) {
             when {
                 missingPerms.isNotEmpty() -> {
@@ -180,7 +186,7 @@ fun ReceiverScreen(
     }
 
     val handleBack: () -> Unit = {
-        viewModel.cancelAll()
+        viewModel.leavePreservingInterrupted()
         onDone()
     }
     BackHandler(onBack = handleBack)
@@ -254,6 +260,17 @@ fun ReceiverScreen(
                         canRequestInstalls = canRequestInstalls,
                         receivedApps = receivedApps,
                         onStartDownload = { url -> viewModel.startHttpDownload(url) },
+                        onResumeInterruptedHotspot = { rec -> viewModel.resumeInterruptedHotspotTransfer(rec) },
+                        onClearInterruptedTransfer = {
+                            viewModel.clearInterruptedTransfer()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.transfer_resume_cleared_toast),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        onCancelActiveDownload = { viewModel.cancelOngoingHotspotDownload() },
+                        onRetryCancelledDownload = { url -> viewModel.retryCancelledHotspotDownload(url) },
                         onCancelDownload = { viewModel.cancelAll() },
                         onSwitchToNearby = { viewModel.switchToNearbyMode() },
                         onOpenUnknownSources = { viewModel.openUnknownAppSourcesSettings() },
@@ -549,28 +566,64 @@ fun ReceiverScreen(
                         is NearbyReceiverState.IncomingOffer -> {
                             AlertDialog(
                                 onDismissRequest = { viewModel.declineIncomingOffer() },
-                                title = { Text(stringResource(R.string.receiver_incoming_offer_title)) },
+                                title = {
+                                    Text(
+                                        stringResource(
+                                            if (state.metadata.isGenericFile) {
+                                                R.string.receiver_incoming_file_title
+                                            } else {
+                                                R.string.receiver_incoming_offer_title
+                                            }
+                                        )
+                                    )
+                                },
                                 text = {
                                     Column(
                                         verticalArrangement = Arrangement.spacedBy(12.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Base64AppIcon(
-                                            iconBase64 = state.metadata.iconBase64,
-                                            size = 64.dp,
-                                            tint = SuccessGreen
-                                        )
+                                        if (state.metadata.isGenericFile) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(64.dp)
+                                                    .clip(RoundedCornerShape(16.dp))
+                                                    .background(SuccessGreen.copy(alpha = 0.14f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = iconForMimeType(
+                                                        state.metadata.mimeType,
+                                                        state.metadata.appName
+                                                    ),
+                                                    contentDescription = null,
+                                                    tint = SuccessGreen,
+                                                    modifier = Modifier.size(34.dp)
+                                                )
+                                            }
+                                        } else {
+                                            Base64AppIcon(
+                                                iconBase64 = state.metadata.iconBase64,
+                                                size = 64.dp,
+                                                tint = SuccessGreen
+                                            )
+                                        }
                                         Text(
                                             text = state.metadata.appName,
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = stringResource(
-                                                R.string.sender_bundle_meta,
-                                                state.metadata.versionName,
-                                                FormatUtils.formatBytes(state.metadata.totalSizeBytes)
-                                            ),
+                                            text = if (state.metadata.isGenericFile) {
+                                                val sizeText = FormatUtils.formatBytes(state.metadata.totalSizeBytes)
+                                                val mime = state.metadata.mimeType
+                                                if (!mime.isNullOrBlank()) "$sizeText • $mime" else sizeText
+                                            } else {
+                                                stringResource(
+                                                    R.string.sender_bundle_meta,
+                                                    state.metadata.versionName,
+                                                    FormatUtils.formatBytes(state.metadata.totalSizeBytes)
+                                                )
+                                            },
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -620,21 +673,93 @@ fun ReceiverScreen(
                         }
 
                         is NearbyReceiverState.Downloading -> {
+                            val pausedDetail = when {
+                                !state.isPaused -> null
+                                state.isWaitingWhilePaused -> stringResource(R.string.transfer_paused_waiting_next_file)
+                                else -> stringResource(R.string.transfer_paused_finishing_current)
+                            }
                             CircularTransferProgress(
                                 progress = state.progress,
                                 accentColor = SuccessGreen,
                                 title = stringResource(R.string.receiver_receiving_app, state.metadata.appName),
                                 subtitle = stringResource(R.string.receiver_from_peer_short, state.peerName),
-                                directionLabel = stringResource(R.string.progress_direction_received)
+                                directionLabel = stringResource(R.string.progress_direction_received),
+                                isPaused = state.isPaused,
+                                pausedDetail = pausedDetail
                             )
-                            OutlinedButton(
-                                onClick = handleBack,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("cancel_downloading_button")
+                            if (!state.statusNotice.isNullOrBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("transfer_resume_notice_banner")
+                                ) {
+                                    Text(
+                                        text = state.statusNotice,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
+                                if (state.isPaused) {
+                                    Button(
+                                        onClick = { viewModel.resumeNearbyTransfer() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = SuccessGreen,
+                                            contentColor = Color.White
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .testTag("pause_resume_receiver_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = stringResource(R.string.transfer_action_resume),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { viewModel.pauseNearbyTransfer() },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .testTag("pause_resume_receiver_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Pause,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.transfer_action_pause))
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.cancelOngoingNearbyTransfer() },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .testTag("cancel_downloading_button")
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_cancel),
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
 
@@ -678,27 +803,10 @@ fun ReceiverScreen(
                             )
                         }
 
-                        is NearbyReceiverState.Error -> {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Icon(
-                                imageVector = Icons.Rounded.ErrorOutline,
-                                contentDescription = stringResource(R.string.cd_error),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.receiver_transfer_interrupted_title),
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = state.reason,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Button(
-                                onClick = {
+                        is NearbyReceiverState.Cancelled -> {
+                            TransferCancelledView(
+                                accentColor = SuccessGreen,
+                                onTryAgain = {
                                     missingPerms = PermissionHelper.missingPermissions(context, requiredPermissions)
                                     connectivity = PermissionHelper.checkConnectivity(context)
                                     when {
@@ -709,22 +817,135 @@ fun ReceiverScreen(
                                             showConnectivityDialog = true
                                         }
                                         else -> {
-                                            viewModel.startNearbyDiscovery()
+                                            viewModel.retryCancelledNearbyTransfer()
                                         }
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SuccessGreen,
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .testTag("retry_nearby_receiver_button")
-                            ) {
-                                Icon(Icons.Rounded.Refresh, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.sender_retry_nearby))
+                                onDone = handleBack
+                            )
+                        }
+
+                        is NearbyReceiverState.Error -> {
+                            val interrupted = state.interruptedRecord
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.ErrorOutline,
+                                contentDescription = stringResource(R.string.cd_error),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            if (interrupted != null) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.transfer_interrupted_progress,
+                                        FormatUtils.formatTransferSize(interrupted.totalReceivedBytes),
+                                        FormatUtils.formatTransferSize(interrupted.totalSizeBytes)
+                                    ),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.testTag("interrupted_progress_text")
+                                )
+                                Text(
+                                    text = interrupted.metadata.appName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.receiver_transfer_interrupted_title),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = state.reason,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            if (interrupted != null) {
+                                Button(
+                                    onClick = {
+                                        missingPerms = PermissionHelper.missingPermissions(context, requiredPermissions)
+                                        connectivity = PermissionHelper.checkConnectivity(context)
+                                        when {
+                                            missingPerms.isNotEmpty() -> {
+                                                permissionLauncher.launch(missingPerms.toTypedArray())
+                                            }
+                                            !connectivity.isReadyForNearby -> {
+                                                showConnectivityDialog = true
+                                            }
+                                            else -> {
+                                                viewModel.resumeInterruptedNearbyTransfer(interrupted)
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = SuccessGreen,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                        .testTag("resume_interrupted_nearby_button")
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.transfer_resume_button),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        viewModel.clearInterruptedTransfer()
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.transfer_resume_cleared_toast),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("clear_interrupted_nearby_button")
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.transfer_action_clear_partial),
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        missingPerms = PermissionHelper.missingPermissions(context, requiredPermissions)
+                                        connectivity = PermissionHelper.checkConnectivity(context)
+                                        when {
+                                            missingPerms.isNotEmpty() -> {
+                                                permissionLauncher.launch(missingPerms.toTypedArray())
+                                            }
+                                            !connectivity.isReadyForNearby -> {
+                                                showConnectivityDialog = true
+                                            }
+                                            else -> {
+                                                viewModel.startNearbyDiscovery()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = SuccessGreen,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                        .testTag("retry_nearby_receiver_button")
+                                ) {
+                                    Icon(Icons.Rounded.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.sender_retry_nearby))
+                                }
                             }
                             OutlinedButton(
                                 onClick = { viewModel.switchToHotspotMode() },
@@ -753,6 +974,10 @@ private fun HotspotReceiverContent(
     canRequestInstalls: Boolean,
     receivedApps: List<ReceivedAppItem>,
     onStartDownload: (String) -> Unit,
+    onResumeInterruptedHotspot: (InterruptedTransferRecord) -> Unit,
+    onClearInterruptedTransfer: () -> Unit,
+    onCancelActiveDownload: () -> Unit,
+    onRetryCancelledDownload: (String) -> Unit,
     onCancelDownload: () -> Unit,
     onSwitchToNearby: () -> Unit,
     onOpenUnknownSources: () -> Unit,
@@ -870,7 +1095,10 @@ private fun HotspotReceiverContent(
             Spacer(modifier = Modifier.height(24.dp))
             CircularProgressIndicator(color = SuccessGreen)
             Text(stringResource(R.string.receiver_connecting_to, httpState.url))
-            TextButton(onClick = onCancelDownload) {
+            TextButton(
+                onClick = onCancelActiveDownload,
+                modifier = Modifier.testTag("cancel_hotspot_download_button")
+            ) {
                 Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.error)
             }
         }
@@ -883,9 +1111,29 @@ private fun HotspotReceiverContent(
                 subtitle = stringResource(R.string.receiver_via_hotspot_http),
                 directionLabel = stringResource(R.string.progress_direction_received)
             )
+            if (!httpState.statusNotice.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("hotspot_resume_notice_banner")
+                ) {
+                    Text(
+                        text = httpState.statusNotice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            }
             OutlinedButton(
-                onClick = onCancelDownload,
-                modifier = Modifier.fillMaxWidth()
+                onClick = onCancelActiveDownload,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("cancel_hotspot_download_button")
             ) {
                 Text(stringResource(R.string.receiver_cancel_download), color = MaterialTheme.colorScheme.error)
             }
@@ -909,18 +1157,47 @@ private fun HotspotReceiverContent(
             )
         }
 
+        is HttpDownloadState.Cancelled -> {
+            TransferCancelledView(
+                accentColor = SuccessGreen,
+                onTryAgain = { onRetryCancelledDownload(httpState.url) },
+                onDone = onCancelDownload
+            )
+        }
+
         is HttpDownloadState.Error -> {
+            val interrupted = httpState.interruptedRecord
             Icon(
                 imageVector = Icons.Rounded.ErrorOutline,
                 contentDescription = stringResource(R.string.receiver_download_error_cd),
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
-            Text(
-                text = stringResource(R.string.receiver_download_failed_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            if (interrupted != null) {
+                Text(
+                    text = stringResource(
+                        R.string.transfer_interrupted_progress,
+                        FormatUtils.formatTransferSize(interrupted.totalReceivedBytes),
+                        FormatUtils.formatTransferSize(interrupted.totalSizeBytes)
+                    ),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("hotspot_interrupted_progress_text")
+                )
+                Text(
+                    text = interrupted.metadata.appName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.receiver_download_failed_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text(
                 text = httpState.reason,
                 style = MaterialTheme.typography.bodyMedium,
@@ -928,15 +1205,41 @@ private fun HotspotReceiverContent(
                 textAlign = TextAlign.Center
             )
             Button(
-                onClick = { onStartDownload(httpState.url) },
+                onClick = {
+                    if (interrupted != null) {
+                        onResumeInterruptedHotspot(interrupted)
+                    } else {
+                        onStartDownload(httpState.url)
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen, contentColor = Color.White),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
+                    .testTag("resume_interrupted_hotspot_button")
             ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null)
+                Icon(
+                    imageVector = if (interrupted != null) Icons.Rounded.PlayArrow else Icons.Rounded.Refresh,
+                    contentDescription = null
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.receiver_resume_retry_download))
+                Text(
+                    text = stringResource(R.string.receiver_resume_retry_download),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (interrupted != null) {
+                TextButton(
+                    onClick = onClearInterruptedTransfer,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("clear_interrupted_hotspot_button")
+                ) {
+                    Text(
+                        text = stringResource(R.string.transfer_action_clear_partial),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
             OutlinedButton(
                 onClick = onCancelDownload,
@@ -964,6 +1267,7 @@ private fun DownloadCompleteInstallSection(
     onOpenAppClick: () -> Unit,
     onDone: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1000,7 +1304,24 @@ private fun DownloadCompleteInstallSection(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Base64AppIcon(iconBase64 = metadata.iconBase64, size = 54.dp, tint = SuccessGreen)
+                if (metadata.isGenericFile) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(SuccessGreen.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = iconForMimeType(metadata.mimeType, metadata.appName),
+                            contentDescription = null,
+                            tint = SuccessGreen,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                } else {
+                    Base64AppIcon(iconBase64 = metadata.iconBase64, size = 54.dp, tint = SuccessGreen)
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -1009,12 +1330,20 @@ private fun DownloadCompleteInstallSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = stringResource(
-                            R.string.receiver_complete_meta,
-                            metadata.versionName,
-                            FormatUtils.formatBytes(metadata.totalSizeBytes),
-                            FormatUtils.formatDurationMillis(durationMillis)
-                        ),
+                        text = if (metadata.isGenericFile) {
+                            stringResource(
+                                R.string.receiver_file_complete_meta,
+                                FormatUtils.formatBytes(metadata.totalSizeBytes),
+                                FormatUtils.formatDurationMillis(durationMillis)
+                            )
+                        } else {
+                            stringResource(
+                                R.string.receiver_complete_meta,
+                                metadata.versionName,
+                                FormatUtils.formatBytes(metadata.totalSizeBytes),
+                                FormatUtils.formatDurationMillis(durationMillis)
+                            )
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1032,7 +1361,7 @@ private fun DownloadCompleteInstallSection(
                             color = PrimaryBlue
                         )
                     }
-                    if (metadata.isSplitApk) {
+                    if (!metadata.isGenericFile && metadata.isSplitApk) {
                         Text(
                             text = stringResource(R.string.receiver_split_installer_note, savedFiles.size),
                             style = MaterialTheme.typography.labelSmall,
@@ -1043,15 +1372,23 @@ private fun DownloadCompleteInstallSection(
             }
         }
 
-        if (!canRequestInstalls) {
-            UnknownSourcesPermissionCard(onOpenSettings = onOpenUnknownSources)
-        }
-
-        when (installState) {
-            is InstallState.Idle -> {
+        if (metadata.isGenericFile) {
+            if (savedFiles.isNotEmpty()) {
                 Button(
-                    onClick = onInstallClick,
-                    enabled = canRequestInstalls,
+                    onClick = {
+                        val opened = FileTransferHelper.openFileWithSystemViewer(
+                            context = context,
+                            file = savedFiles.first(),
+                            mimeType = metadata.mimeType
+                        )
+                        if (!opened) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.receiver_no_viewer_toast),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SuccessGreen,
                         contentColor = Color.White
@@ -1059,100 +1396,129 @@ private fun DownloadCompleteInstallSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .testTag("install_apk_button")
+                        .testTag("open_received_file_button")
                 ) {
-                    Icon(Icons.Rounded.InstallMobile, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        stringResource(R.string.receiver_install_app_button),
+                        stringResource(R.string.receiver_open_file_button),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
-
-            is InstallState.Installing -> {
-                CircularProgressIndicator(color = SuccessGreen)
-                Text(
-                    text = installState.detail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
-                )
+        } else {
+            if (!canRequestInstalls) {
+                UnknownSourcesPermissionCard(onOpenSettings = onOpenUnknownSources)
             }
 
-            is InstallState.PendingUserConfirmation -> {
-                Text(
-                    text = stringResource(R.string.receiver_confirm_system_install),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                OutlinedButton(
-                    onClick = onInstallClick,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.receiver_tap_install_again))
-                }
-            }
-
-            is InstallState.Installed -> {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = SuccessGreen.copy(alpha = 0.14f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = stringResource(R.string.receiver_installed_success_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SuccessGreen,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(14.dp)
-                    )
-                }
-                if (metadata.packageName.isNotBlank()) {
+            when (installState) {
+                is InstallState.Idle -> {
                     Button(
-                        onClick = onOpenAppClick,
+                        onClick = onInstallClick,
+                        enabled = canRequestInstalls,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryBlue,
+                            containerColor = SuccessGreen,
                             contentColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp)
-                            .testTag("open_installed_app_button")
+                            .height(56.dp)
+                            .testTag("install_apk_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null)
+                        Icon(Icons.Rounded.InstallMobile, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.receiver_installed_open_app), fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.receiver_install_app_button),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-            }
 
-            is InstallState.Failed -> {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                is InstallState.Installing -> {
+                    CircularProgressIndicator(color = SuccessGreen)
                     Text(
-                        text = installState.reason,
+                        text = installState.detail,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(14.dp)
+                        textAlign = TextAlign.Center
                     )
                 }
-                Button(
-                    onClick = onInstallClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SuccessGreen,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                ) {
-                    Text(stringResource(R.string.receiver_retry_install), fontWeight = FontWeight.Bold)
+
+                is InstallState.PendingUserConfirmation -> {
+                    Text(
+                        text = stringResource(R.string.receiver_confirm_system_install),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedButton(
+                        onClick = onInstallClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.receiver_tap_install_again))
+                    }
+                }
+
+                is InstallState.Installed -> {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = SuccessGreen.copy(alpha = 0.14f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(R.string.receiver_installed_success_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SuccessGreen,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                    if (metadata.packageName.isNotBlank()) {
+                        Button(
+                            onClick = onOpenAppClick,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryBlue,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .testTag("open_installed_app_button")
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.receiver_installed_open_app), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                is InstallState.Failed -> {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = installState.reason,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                    Button(
+                        onClick = onInstallClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SuccessGreen,
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                    ) {
+                        Text(stringResource(R.string.receiver_retry_install), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1166,10 +1532,20 @@ private fun DownloadCompleteInstallSection(
         ) {
             Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.receiver_receive_next_app), fontWeight = FontWeight.SemiBold)
+            Text(
+                stringResource(
+                    if (metadata.isGenericFile) {
+                        R.string.receiver_receive_next_file
+                    } else {
+                        R.string.receiver_receive_next_app
+                    }
+                ),
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         if (receivedApps.size > 1) {
+            val hasFiles = receivedApps.any { it.metadata.isGenericFile }
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
@@ -1184,7 +1560,14 @@ private fun DownloadCompleteInstallSection(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.receiver_received_batch_title, receivedApps.size),
+                        text = stringResource(
+                            if (hasFiles) {
+                                R.string.receiver_received_files_batch_title
+                            } else {
+                                R.string.receiver_received_batch_title
+                            },
+                            receivedApps.size
+                        ),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -1201,17 +1584,45 @@ private fun DownloadCompleteInstallSection(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "v${item.metadata.versionName} · ${FormatUtils.formatBytes(item.metadata.totalSizeBytes)}",
+                                    text = if (item.metadata.isGenericFile) {
+                                        FormatUtils.formatBytes(item.metadata.totalSizeBytes)
+                                    } else {
+                                        "v${item.metadata.versionName} · ${FormatUtils.formatBytes(item.metadata.totalSizeBytes)}"
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(
-                                onClick = { onInstallReceivedItem(item) },
-                                enabled = canRequestInstalls,
-                                modifier = Modifier.testTag("install_batch_item_${item.metadata.packageName}")
-                            ) {
-                                Text(stringResource(R.string.receiver_install_short))
+                            if (item.metadata.isGenericFile) {
+                                TextButton(
+                                    onClick = {
+                                        val file = item.savedFiles.firstOrNull()
+                                        val opened = file != null && FileTransferHelper.openFileWithSystemViewer(
+                                            context = context,
+                                            file = file,
+                                            mimeType = item.metadata.mimeType
+                                        )
+                                        if (!opened) {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.receiver_no_viewer_toast),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    },
+                                    enabled = item.savedFiles.isNotEmpty(),
+                                    modifier = Modifier.testTag("open_batch_file_${item.metadata.appName}")
+                                ) {
+                                    Text(stringResource(R.string.receiver_open_short))
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = { onInstallReceivedItem(item) },
+                                    enabled = canRequestInstalls,
+                                    modifier = Modifier.testTag("install_batch_item_${item.metadata.packageName}")
+                                ) {
+                                    Text(stringResource(R.string.receiver_install_short))
+                                }
                             }
                         }
                     }

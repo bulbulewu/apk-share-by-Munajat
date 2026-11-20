@@ -456,4 +456,92 @@
     <string name="receiver_receive_next_app">পরবর্তী অ্যাপ গ্রহণ করুন</string>
     <string name="receiver_received_batch_title">গৃহীত অ্যাপসমূহ (%1$d)</string>
     <string name="receiver_install_short">ইনস্টল</string>
+
+    <!-- File Sending (Photos, Videos, Music, Documents, Any File) -->
+    <string name="picker_tab_apps">অ্যাপস</string>
+    <string name="picker_tab_files">ফাইল</string>
+    <string name="picker_files_note">ছবি, ভিডিও, গান, পিডিএফ বা যেকোনো ফাইল আসল মানে অফলাইনে পাঠান</string>
+    <string name="picker_pick_files_button">ফাইল বাছাই করুন</string>
+    <string name="picker_add_more_files">আরও ফাইল যোগ করুন</string>
+    <string name="picker_files_empty_title">কোনো ফাইল নির্বাচন করা হয়নি</string>
+    <string name="picker_files_empty_body">ছবি, ভিডিও, অডিও, ডকুমেন্ট, জিপ আর্কাইভ বা যেকোনো ফাইল নির্বাচন করতে ফাইল বাছাই করুন-এ ট্যাপ করুন।</string>
+    <string name="picker_remove_file_cd">%1$s সরান</string>
+    <string name="picker_one_file_selected">১টি ফাইল নির্বাচিত</string>
+    <string name="picker_files_selected_count">%1$dটি ফাইল নির্বাচিত</string>
+    <string name="picker_preparing_file">প্রস্তুত হচ্ছে…</string>
+    <string name="save_files_success_multiple">%1$dটি ফাইল Downloads/APK Share ফোল্ডারে সংরক্ষিত হয়েছে</string>
+    <string name="save_files_partial">%2$dটির মধ্যে %1$dটি ফাইল Downloads/APK Share ফোল্ডারে সংরক্ষিত হয়েছে</string>
+    <string name="save_files_failed">ডাউনলোড ফোল্ডারে ফাইল সংরক্ষণ করা যায়নি।</string>
+    <string name="share_file_cd">%1$s শেয়ার করুন</string>
+    <string name="share_multiple_files_chooser_title">%1$dটি ফাইল শেয়ার করুন…</string>
+    <string name="share_multiple_files_subject">%1$dটি ফাইল</string>
+    <string name="batch_summary_files_sent_count">%2$dটির মধ্যে %1$dটি ফাইল পাঠানো হয়েছে</string>
+    <string name="batch_summary_files_all_failed">নির্বাচিত ফাইলগুলো পাঠানো যায়নি।</string>
+    <string name="batch_summary_failed_files_header">ব্যর্থ ফাইলসমূহ:</string>
+    <string name="batch_hotspot_next_file">পরবর্তী ফাইল (%1$d/%2$d)</string>
+    <string name="batch_hotspot_skip_file">ফাইল এড়িয়ে যান</string>
+    <string name="sender_file_label">আসল ফাইল</string>
+    <string name="receiver_open_file_button">ফাইল খুলুন</string>
+    <string name="receiver_open_short">খুলুন</string>
+    <string name="receiver_receive_next_file">পরবর্তী ফাইল গ্রহণ করুন</string>
+    <string name="receiver_received_files_batch_title">গৃহীত আইটেমসমূহ (%1$d)</string>
+    <string name="receiver_no_viewer_toast">এই ফাইল খোলার মতো কোনো অ্যাপ ফোনে পাওয়া যায়নি।</string>
+    <string name="receiver_file_missing_toast">ফাইলটি আর এই ডিভাইসে উপলব্ধ নেই।</string>
+    <string name="receiver_incoming_file_title">আগত ফাইল</string>
+    <string name="receiver_file_complete_meta">%1$s • সময় %2$s</string>
+    <string name="history_file_item_meta">ফাইল • %1$s • %2$s</string>
+    <string name="history_tap_to_open_file">খুলতে ট্যাপ করুন</string>
+    <string name="error_cannot_read_file">ফাইল পড়া যাচ্ছে না: %1$s</string>
+    <string name="error_not_enough_storage_file">%1$s প্রস্তুত করার জন্য পর্যাপ্ত ফাঁকা জায়গা নেই (%2$s প্রয়োজন)।</string>
+
+    <!-- Live Transfer Speed, ETA, Pause/Resume & Cancel -->
+    <string name="transfer_amount_of_total">%2$s-এর মধ্যে %1$s · %3$d%%</string>
+    <string name="transfer_eta_left">%1$s বাকি</string>
+    <string name="transfer_action_pause">বিরতি</string>
+    <string name="transfer_action_resume">চালু করুন</string>
+    <string name="transfer_status_paused">বিরতিতে আছে</string>
+    <string name="transfer_paused_finishing_current">বিরতিতে আছে — বর্তমান ফাইল শেষ হলে কিউ থামবে</string>
+    <string name="transfer_paused_waiting_queue">বিরতিতে আছে — %2$dটির মধ্যে %1$dটি সম্পন্ন। %3$s পাঠাতে চালু করুন-এ ট্যাপ করুন।</string>
+    <string name="transfer_paused_waiting_next_file">বিরতিতে আছে — বাকি ফাইলগুলো চালিয়ে যেতে চালু করুন-এ ট্যাপ করুন</string>
+    <string name="transfer_cancelled_title">ট্রান্সফার বাতিল করা হয়েছে</string>
+    <string name="transfer_cancelled_subtitle">ট্রান্সফার নিরাপদে বন্ধ করা হয়েছে এবং কোনো অসম্পূর্ণ ফাইল সংরক্ষণ করা হয়নি।</string>
+    <string name="transfer_try_again">আবার চেষ্টা করুন</string>
+
+    <!-- Resume Interrupted Transfers -->
+    <string name="transfer_interrupted_progress">ট্রান্সফার বিঘ্নিত হয়েছে — %2$s-এর মধ্যে %1$s গৃহীত হয়েছে</string>
+    <string name="transfer_action_clear_partial">মুছে ফেলুন</string>
+    <string name="transfer_resume_button">পুনরায় শুরু করুন</string>
+    <string name="transfer_resume_reconnecting">%2$s থেকে পুনরায় শুরু করতে %1$s-এর সাথে সংযোগ হচ্ছে…</string>
+    <string name="transfer_resume_server_no_range">প্রেরক আংশিক রিজিউম সমর্থন করে না — শুরু থেকে ডাউনলোড হচ্ছে।</string>
+    <string name="transfer_resume_file_changed_restart">ফাইল পরিবর্তিত হয়েছে বা আংশিক কপি অবৈধ — শুরু থেকে ডাউনলোড হচ্ছে।</string>
+    <string name="transfer_resume_restored_reason">%1$s-এর একটি অসম্পূর্ণ ট্রান্সফার এই ডিভাইসে সংরক্ষিত আছে। যেখানে থেমেছিল সেখান থেকে চালিয়ে যেতে পুনরায় শুরু করুন-এ ট্যাপ করুন।</string>
+    <string name="transfer_resume_cleared_toast">অসম্পূর্ণ ট্রান্সফার মুছে ফেলা হয়েছে</string>
+
+    <!-- Share to PC Mode -->
+    <string name="picker_share_to_pc">পিসিতে শেয়ার</string>
+    <string name="picker_share_to_pc_cd">ওয়াই-ফাই হটস্পটের মাধ্যমে পিসিতে শেয়ার করুন</string>
+    <string name="picker_cross_tab_pc_note">+ অন্য ট্যাব থেকে আরও %1$dটি নির্বাচিত (পিসিতে শেয়ারে যুক্ত)</string>
+    <string name="pc_share_title">পিসিতে শেয়ার করুন</string>
+    <string name="pc_share_subtitle">ইউএসবি কেবল ছাড়াই আপনার উইন্ডোজ পিসি ব্রাউজারে নির্বাচিত অ্যাপ ও ফাইল ডাউনলোড করুন</string>
+    <string name="pc_share_step_1_with_ssid">১. আপনার পিসিতে এই ওয়াই-ফাইয়ে যুক্ত হোন: %1$s</string>
+    <string name="pc_share_step_1_starting">১. আপনার পিসিতে ওয়াই-ফাইয়ে যুক্ত হোন: এই ফোনের হটস্পট</string>
+    <string name="pc_share_step_2">২. পিসির ব্রাউজারে এই ঠিকানাটি খুলুন:</string>
+    <string name="pc_share_step_3">৩. ডাউনলোড করতে পেজের একটি ফাইলে ক্লিক করুন</string>
+    <string name="pc_share_items_ready_count">ডাউনলোডের জন্য %1$dটি আইটেম প্রস্তুত (মোট %2$s)</string>
+    <string name="pc_share_items_ready_single">ডাউনলোডের জন্য ১টি আইটেম প্রস্তুত (%1$s)</string>
+    <string name="pc_share_copy_password_cd">হটস্পট পাসওয়ার্ড কপি করুন</string>
+    <string name="pc_share_password_copied_toast">হটস্পট পাসওয়ার্ড কপি হয়েছে</string>
+    <string name="pc_share_status_header">লাইভ ডাউনলোড অবস্থা</string>
+    <string name="pc_share_status_downloading">ডাউনলোড হচ্ছে: %1$s</string>
+    <string name="pc_share_status_last_file">সর্বশেষ ডাউনলোডকৃত: %1$s</string>
+    <string name="pc_share_status_waiting">আপনার পিসি ব্রাউজার থেকে ডাউনলোড লিংকে ক্লিক করার অপেক্ষা করছে…</string>
+    <string name="pc_share_bytes_served">প্রেরিত: %1$s</string>
+    <string name="pc_share_speed_label">গতি: %1$s</string>
+    <string name="pc_share_stop_button">শেয়ারিং বন্ধ করুন</string>
+    <string name="pc_share_safety_note">শুধুমাত্র লোকাল হটস্পট — এই ওয়াই-ফাইয়ে যুক্ত যে কেউ এই ফাইলগুলো ডাউনলোড করতে পারবেন। কাজ শেষে শেয়ারিং বন্ধ করুন।</string>
+    <string name="pc_share_web_page_subtitle">আপনার পিসিতে ডাউনলোড করতে নিচের যেকোনো ফাইলে ক্লিক করুন।</string>
+    <string name="pc_share_web_download">ডাউনলোড</string>
+    <string name="pc_share_error_none_staged">নির্বাচিত অ্যাপ বা ফাইলগুলো পিসি ডাউনলোডের জন্য প্রস্তুত করা যায়নি।</string>
+    <string name="pc_share_split_apk_label">সংস্করণ %1$s • স্প্লিট APK (.apks)</string>
+    <string name="pc_share_single_apk_label">সংস্করণ %1$s • APK</string>
 </resources>

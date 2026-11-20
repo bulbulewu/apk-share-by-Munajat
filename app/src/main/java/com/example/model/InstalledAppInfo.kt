@@ -16,6 +16,13 @@ data class InstalledAppInfo(
     val totalApkFileCount: Int get() = 1 + splitApkPaths.size
 }
 
+data class PickedFileInfo(
+    val uriString: String,
+    val displayName: String,
+    val sizeBytes: Long,
+    val mimeType: String
+)
+
 data class ExtractedApkBundle(
     val transferId: String,
     val appName: String,
@@ -26,5 +33,7 @@ data class ExtractedApkBundle(
     val files: List<File>,
     val totalSizeBytes: Long,
     val stagingDir: File,
-    val iconBase64: String?
+    val iconBase64: String?,
+    val isGenericFile: Boolean = false,
+    val mimeType: String? = null
 )

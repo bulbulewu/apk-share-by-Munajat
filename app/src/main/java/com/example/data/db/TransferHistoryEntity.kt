@@ -20,5 +20,8 @@ data class TransferHistoryEntity(
     val peerDeviceName: String,
     val isSplitApk: Boolean = false,
     val durationMillis: Long = 0L,
-    val errorReason: String? = null
+    val errorReason: String? = null,
+    val isGenericFile: Boolean = false,
+    val mimeType: String? = null,
+    val savedFilePath: String? = null
 )

@@ -36,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.BluetoothDisabled
+import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
@@ -244,7 +246,9 @@ fun CircularTransferProgress(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
-    directionLabel: String = stringResource(R.string.progress_direction_transferred)
+    directionLabel: String = stringResource(R.string.progress_direction_transferred),
+    isPaused: Boolean = false,
+    pausedDetail: String? = null
 ) {
     val powerSaver = LocalPowerSaverEnabled.current
     val animatedFraction by animateFloatAsState(
@@ -254,6 +258,22 @@ fun CircularTransferProgress(
     )
     val sweepFraction = if (powerSaver) progress.progressFraction else animatedFraction
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
+
+    val clampedTransferred = progress.bytesTransferred.coerceAtLeast(0L).let {
+        if (progress.totalBytes > 0L) it.coerceAtMost(progress.totalBytes) else it
+    }
+    val liveSpeed = if (isPaused) 0L else progress.speedBytesPerSec
+    val speedText = FormatUtils.formatLiveSpeed(liveSpeed)
+    val etaClock = if (isPaused || liveSpeed <= 0L) {
+        null
+    } else {
+        FormatUtils.formatEtaClock(progress.etaSeconds)
+    }
+    val etaText = if (etaClock != null) {
+        stringResource(R.string.transfer_eta_left, etaClock)
+    } else {
+        FormatUtils.UNKNOWN_METRIC
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -272,6 +292,34 @@ fun CircularTransferProgress(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        if (isPaused) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = WarningAmber.copy(alpha = 0.16f),
+                modifier = Modifier.testTag("transfer_paused_badge")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PauseCircle,
+                        contentDescription = stringResource(R.string.transfer_status_paused),
+                        tint = WarningAmber,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = pausedDetail ?: stringResource(R.string.transfer_status_paused),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = WarningAmber,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
         if (powerSaver) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
@@ -302,7 +350,7 @@ fun CircularTransferProgress(
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
                 drawArc(
-                    color = accentColor,
+                    color = if (isPaused) WarningAmber else accentColor,
                     startAngle = -90f,
                     sweepAngle = 360f * sweepFraction,
                     useCenter = false,
@@ -314,16 +362,21 @@ fun CircularTransferProgress(
                     text = "${progress.progressPercent}%",
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
-                    color = accentColor
+                    color = if (isPaused) WarningAmber else accentColor
                 )
                 Text(
-                    text = stringResource(
-                        R.string.progress_apk_count,
-                        progress.completedFiles.coerceAtMost(progress.totalFiles),
-                        progress.totalFiles
-                    ),
+                    text = if (isPaused) {
+                        stringResource(R.string.transfer_status_paused)
+                    } else {
+                        stringResource(
+                            R.string.progress_apk_count,
+                            progress.completedFiles.coerceAtMost(progress.totalFiles),
+                            progress.totalFiles
+                        )
+                    },
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isPaused) WarningAmber else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isPaused) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }
@@ -337,23 +390,38 @@ fun CircularTransferProgress(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TransferProgressBar(
                     bytesTransferred = progress.bytesTransferred,
                     totalBytes = progress.totalBytes,
-                    accentColor = accentColor,
+                    accentColor = if (isPaused) WarningAmber else accentColor,
                     directionLabel = directionLabel,
                     fileName = progress.currentFileName,
                     testTagName = "transfer_progress_bar"
                 )
+                if (progress.totalBytes > 0L) {
+                    Text(
+                        text = stringResource(
+                            R.string.transfer_amount_of_total,
+                            FormatUtils.formatTransferSize(clampedTransferred),
+                            FormatUtils.formatTransferSize(progress.totalBytes),
+                            progress.progressPercent
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.testTag("transfer_live_amount")
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     MetricPill(
                         label = stringResource(R.string.progress_metric_speed),
-                        value = FormatUtils.formatSpeed(progress.speedBytesPerSec)
+                        value = speedText,
+                        valueTestTag = "transfer_live_speed"
                     )
                     MetricPill(
                         label = stringResource(R.string.progress_metric_files),
@@ -361,7 +429,8 @@ fun CircularTransferProgress(
                     )
                     MetricPill(
                         label = stringResource(R.string.progress_metric_eta),
-                        value = FormatUtils.formatEta(progress.etaSeconds)
+                        value = etaText,
+                        valueTestTag = "transfer_live_eta"
                     )
                 }
             }
@@ -370,7 +439,11 @@ fun CircularTransferProgress(
 }
 
 @Composable
-private fun MetricPill(label: String, value: String) {
+private fun MetricPill(
+    label: String,
+    value: String,
+    valueTestTag: String? = null
+) {
     Column {
         Text(
             text = label,
@@ -381,8 +454,78 @@ private fun MetricPill(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = if (valueTestTag != null) Modifier.testTag(valueTestTag) else Modifier
         )
+    }
+}
+
+@Composable
+fun TransferCancelledView(
+    accentColor: Color,
+    onTryAgain: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+    secondaryAction: (@Composable () -> Unit)? = null
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Cancel,
+                contentDescription = stringResource(R.string.transfer_cancelled_title),
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+        Text(
+            text = stringResource(R.string.transfer_cancelled_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("transfer_cancelled_title")
+        )
+        Text(
+            text = stringResource(R.string.transfer_cancelled_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Button(
+            onClick = onTryAgain,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = accentColor,
+                contentColor = Color.White
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("transfer_try_again_button")
+        ) {
+            Icon(Icons.Rounded.Refresh, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.transfer_try_again),
+                fontWeight = FontWeight.Bold
+            )
+        }
+        secondaryAction?.invoke()
+        TextButton(
+            onClick = onDone,
+            modifier = Modifier.testTag("transfer_cancelled_done_button")
+        ) {
+            Text(stringResource(R.string.action_done))
+        }
     }
 }
 
